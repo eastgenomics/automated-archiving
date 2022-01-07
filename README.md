@@ -31,7 +31,7 @@ To rebuild image: `docker build -t <image name> .`
 
 Current tested command (local):
 
-```docker run --env-file <config.txt> -v ~/github/automated_archiving/var:/var <image name> ```
+```docker run --env-file <config.txt> -v /var/log:/var/log <image name> ```
 
 ## Automation
 A cron job will be set up to run the script every month
