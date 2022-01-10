@@ -8,6 +8,8 @@ import pickle
 import collections
 import datetime as dt
 from dateutil.relativedelta import relativedelta
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 from helper import get_logger
 
 log = get_logger("main log")
@@ -36,6 +38,10 @@ def post_message_to_slack(channel, index, data, error='', alert=False):
         alert: (optional) (required only when dxpy auth failed) Boolean
 
     """
+
+    http = requests.Session()
+    retries = Retry(total=3, backoff_factor=1, method_whitelist=['POST'])
+    http.mount("https://", HTTPAdapter(max_retries=retries))
 
     lists = [
         'proj_list',
@@ -66,7 +72,8 @@ def post_message_to_slack(channel, index, data, error='', alert=False):
                 "automated-archiving: Error with dxpy token! Error code: \n"
                 f"`{error.error_message()}`"
                 )
-            response = requests.post(
+
+            response = http.post(
                 'https://slack.com/api/chat.postMessage', {
                     'token': os.environ['SLACK_TOKEN'],
                     'channel': f'U02HPRQ9X7Z',
@@ -82,7 +89,7 @@ def post_message_to_slack(channel, index, data, error='', alert=False):
                 log.error(f'Slack API error to #{channel}')
                 log.error(f'Error Code From Slack: {error_code}')
         else:
-            response = requests.post(
+            response = http.post(
                 'https://slack.com/api/chat.postMessage', {
                     'token': os.environ['SLACK_TOKEN'],
                     'channel': f'U02HPRQ9X7Z',
