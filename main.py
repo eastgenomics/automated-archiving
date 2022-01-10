@@ -1,3 +1,15 @@
+"""
+Automated-archiving
+
+This script will check for projs and directories within staging52/53
+which has not been active for the past X months (inactive). It will then
+send a Slack notification to notify the will-be-archived files
+
+The second run of the script will start the archiving process previously
+noted to-be-archive files. It skips files tagged with 'no-archive'
+
+"""
+
 import os
 import sys
 import requests
@@ -134,12 +146,6 @@ def read_or_new_pickle(path):
 
     return pickle_dict
 
-    #     try:
-    #     foo = pickle.load(open("var.pickle", "rb"))
-    # except (OSError, IOError) as e:
-    #     foo = 3
-    #     pickle.dump(foo, open("var.pickle", "wb"))
-
 
 def older_than(month, modified_epoch):
     """
@@ -176,14 +182,6 @@ def check_dir(dir, month):
         False if no 002 returned / 002 been active in past X month
     """
 
-    # days = str(30 * month)
-
-    # result = dx.find_data_objects(
-    #     project=proj,
-    #     folder=dir,
-    #     modified_after=f'-{days}d'
-    # )
-
     result = list(
         dx.find_projects(
             dir,
@@ -199,10 +197,6 @@ def check_dir(dir, month):
         return True
     else:
         return False
-
-    # if list(result):
-    #     return False
-    # return True
 
 
 def dx_login():
