@@ -364,6 +364,9 @@ def get_all_dirs(archive_dict, proj_52, proj_53) -> list:
 def archive_skip_function(dir, proj, archive_dict, temp_dict, num):
     """
     Function to archive directories in staging52 / 53.
+
+    If there is 'never-archive', return
+
     If there is 'no-archive' tag in any file within the directory,
     the dir will be skipped, folder is remembered in archive_pickle['skipped']
 
@@ -380,6 +383,16 @@ def archive_skip_function(dir, proj, archive_dict, temp_dict, num):
     Returns:
         None
     """
+
+    never_archive = list(dx.find_data_objects(
+        project=proj,
+        folder=dir,
+        tags=['never-archive']
+        ))
+
+    if never_archive:
+        log.info(f'NEVER_ARCHIVE {dir} in staging{num}')
+        return
 
     folders = list(dx.find_data_objects(
         project=proj,
@@ -398,7 +411,7 @@ def archive_skip_function(dir, proj, archive_dict, temp_dict, num):
         temp_dict['archived'].append(f'{proj}:{dir}')
 
 
-def find_projs_and_notify():
+def find_projs_and_notify(archive_pickle):
     """
     Function to find projs or directories in staging52/53
     which has not been modified in the last X months (inactive)
@@ -408,8 +421,6 @@ def find_projs_and_notify():
     log.info('Running Code A')
 
     dx_login()
-
-    archive_pickle = read_or_new_pickle(ARCHIVE_PICKLE_PATH)
 
     # special notify include those projs / directories in staging52/53
     # which has been tagged 'no-archive' before but has not been modified
@@ -518,7 +529,7 @@ def find_projs_and_notify():
     log.info('End of Code A')
 
 
-def archiving_function():
+def archiving_function(archive_pickle):
     """
     Function to check previously listed projs and dirs
     which have not been modified (inactive) in the last X months
@@ -532,9 +543,6 @@ def archiving_function():
     log.info('Running Code B')
 
     dx_login()
-
-    # get previously saved dict in pickle
-    archive_pickle = read_or_new_pickle(ARCHIVE_PICKLE_PATH)
 
     list_of_projs = archive_pickle['to_be_archived']
     list_of_dirs_52 = archive_pickle['staging_52']
@@ -594,7 +602,7 @@ def archiving_function():
 
     log.info('End of Code B')
 
-    find_projs_and_notify()
+    find_projs_and_notify(archive_pickle)
 
 
 def main():
@@ -605,9 +613,9 @@ def main():
     staging53 = archive_pickle['staging_53']
 
     if to_be_archived or staging52 or staging53:
-        archiving_function()
+        archiving_function(archive_pickle)
     else:
-        find_projs_and_notify()
+        find_projs_and_notify(archive_pickle)
 
     log.info('End of script.')
 
