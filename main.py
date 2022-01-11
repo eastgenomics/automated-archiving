@@ -149,15 +149,16 @@ def read_or_new_pickle(path):
     return pickle_dict
 
 
-def older_than(month, modified_epoch):
+def older_than(month, modified_epoch) -> bool:
     """
     Determine if a modified epoch date is older than X month
 
     Inputs:
         X month, proj modified date (epoch)
 
-    Returns:
-        Boolean
+    Returns (Boolean):
+        True if haven't been modified in last X month
+        False if have been modified in last X month
     """
 
     modified = modified_epoch / 1000.0
@@ -402,7 +403,6 @@ def archive_skip_function(dir, proj, archive_dict, temp_dict, num):
 
     if folders:
         log.info(f'SKIPPED {dir} in staging{num}')
-        archive_dict['skipped'].append(dir)
     else:
         log.info(f'archiving staging{num}: {dir}')
         # dx.api.project_archive(
@@ -478,28 +478,48 @@ def find_projs_and_notify(archive_pickle):
         log.info('Saving directories to pickle')
 
         for _, proj, file_num, original_dir in old_enough_directories:
-            # remove tag from files tagged with 'no-archive'
-            # and put it in special notify
-            if original_dir in archive_pickle['skipped']:
-                log.info(f'REMOVE_TAG: {original_dir} in skipped')
-                files = list(dx.find_data_objects(
-                    project=proj,
-                    folder=original_dir,
-                    tags=['no-archive']
-                ))
+            # if there's 'never-archive' tag in any file, continue
+            never_archive = list(dx.find_data_objects(
+                project=proj,
+                folder=original_dir,
+                tags=['never-archive']
+            ))
 
-                log.info(f'REMOVE_TAG: removing tag for {len(files)} files')
-                for file in files:
-                    dx.api.file_remove_tags(
-                        file['id'],
-                        input_params={
-                            'tags': ['no-archive'],
-                            'project': proj})
+            if never_archive:
+                log.info(f'NEVER_ARCHIVE: {original_dir} in staging{file_num}')
+                continue
 
-                special_notify.append(f'{original_dir} in staging{file_num}')
-                archive_pickle['skipped'].remove(original_dir)
+            # check for 'no-archive' tag in any files
+            files = list(dx.find_data_objects(
+                project=proj,
+                folder=original_dir,
+                tags=['no-archive'],
+                describe=True
+            ))
 
-            archive_pickle[f'staging_{file_num}'].append(original_dir)
+            if not files:
+                archive_pickle[f'staging_{file_num}'].append(original_dir)
+            else:
+                # check if files are active in the last X month
+                # if no, remove tag and list for special notify
+                # if yes, continue
+                if any([older_than(
+                        MONTH, f['describe']['modified']) for f in files]):
+
+                    log.info(
+                        f'REMOVE_TAG: removing tag for {len(files)} files')
+                    for file in files:
+                        dx.api.file_remove_tags(
+                            file['id'],
+                            input_params={
+                                'tags': ['no-archive'],
+                                'project': proj})
+                    special_notify.append(
+                        f'{original_dir} in staging{file_num}')
+                    archive_pickle[f'staging_{file_num}'].append(original_dir)
+                else:
+                    log.info(f'SKIPPED: {original_dir} in staging{file_num}')
+                    continue
 
     # get everything ready for slack notification
     proj_list = to_be_archived_list
