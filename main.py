@@ -388,7 +388,7 @@ def archive_skip_function(dir, proj, archive_dict, temp_dict, num):
         ))
 
     if folders:
-        log.info(f'Skipped {dir} in staging{num}')
+        log.info(f'SKIPPED {dir} in staging{num}')
         archive_dict['skipped'].append(dir)
     else:
         log.info(f'archiving staging{num}: {dir}')
@@ -416,6 +416,7 @@ def find_projs_and_notify():
     # for X months. It will be listed under its own column in Slack msg
     # to make it more visible
     special_notify = []
+    to_be_archived_list = []
 
     # get all old enough projects
     old_enough_projects_dict = get_all_old_enough_projs(MONTH, archive_pickle)
@@ -439,18 +440,25 @@ def find_projs_and_notify():
         log.info('Saving project-id to pickle')
 
         for k, v in old_enough_projects_dict.items():
+            tags = [tag.lower() for tag in v['describe']['tags']]
+
+            if 'never-archive' in tags:
+                log.info(f'NEVER_ARCHIVE: {k}')
+                continue
             # if there's 'no-archive' tag for the proj
             # remove it and put it in to-be-archived list & special notify
             # section for Slack notification
-            if 'no-archive' in [tag.lower() for tag in v['describe']['tags']]:
+            elif 'no-archive' in tags:
                 id = remove_proj_tag(k)
                 log.info(f'REMOVE_TAG: {id}')
 
                 special_notify.append(v['describe']['name'])
                 archive_pickle['to_be_archived'].append(v['id'])
+                to_be_archived_list.append(v['describe']['name'])
 
             else:
                 archive_pickle['to_be_archived'].append(v['id'])
+                to_be_archived_list.append(v['describe']['name'])
 
     # sieve through each directory in staging52/53
     if old_enough_directories:
@@ -481,8 +489,7 @@ def find_projs_and_notify():
             archive_pickle[f'staging_{file_num}'].append(original_dir)
 
     # get everything ready for slack notification
-    proj_list = [
-        p['describe']['name'] for p in old_enough_projects_dict.values()]
+    proj_list = to_be_archived_list
     folders52 = archive_pickle['staging_52']
     folders53 = archive_pickle['staging_53']
 
@@ -541,8 +548,11 @@ def archiving_function():
             proj_name = proj_desc['name']
 
             # check if proj been tagged with 'no-archive'
-            if 'no-archive' in proj_desc['tags']:
-                log.info(f'Skipped {proj_name}')
+            if 'never-archive' in proj_desc['tags']:
+                log.info(f'NEVER_ARCHIVE {proj_name}')
+                continue
+            elif 'no-archive' in proj_desc['tags']:
+                log.info(f'SKIPPED {proj_name}')
                 continue
             else:
                 log.info(f'archiving {id}')
