@@ -442,12 +442,14 @@ def find_projs_and_notify():
         for k, v in old_enough_projects_dict.items():
             tags = [tag.lower() for tag in v['describe']['tags']]
 
+            # if 'never-archive', move on
+            # if 'no-archive', remove and put it in
+            # to-be-archived list & special notify
+            # for Slack notification
+
             if 'never-archive' in tags:
                 log.info(f'NEVER_ARCHIVE: {k}')
                 continue
-            # if there's 'no-archive' tag for the proj
-            # remove it and put it in to-be-archived list & special notify
-            # section for Slack notification
             elif 'no-archive' in tags:
                 id = remove_proj_tag(k)
                 log.info(f'REMOVE_TAG: {id}')
@@ -465,7 +467,7 @@ def find_projs_and_notify():
         log.info('Saving directories to pickle')
 
         for _, proj, file_num, original_dir in old_enough_directories:
-            # if-clause: remove tag from files tagged with 'no-archive'
+            # remove tag from files tagged with 'no-archive'
             # and put it in special notify
             if original_dir in archive_pickle['skipped']:
                 log.info(f'REMOVE_TAG: {original_dir} in skipped')
