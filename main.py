@@ -49,6 +49,8 @@ def post_message_to_slack(channel, index, data, error='', alert=False):
         error: (optional) (required only when dxpy auth failed) dxpy error msg
         alert: (optional) (required only when dxpy auth failed) Boolean
 
+    Return:
+        None
     """
 
     http = requests.Session()
@@ -94,7 +96,6 @@ def post_message_to_slack(channel, index, data, error='', alert=False):
 
             if response['ok']:
                 log.info(f'POST request to channel #{channel} successful')
-                return
             else:
                 # slack api request failed
                 error_code = response['error']
@@ -112,7 +113,6 @@ def post_message_to_slack(channel, index, data, error='', alert=False):
 
             if response['ok']:
                 log.info(f'POST request to channel #{channel} successful')
-                return
             else:
                 # slack api request failed
                 error_code = response['error']
@@ -259,19 +259,22 @@ def remove_proj_tag(proj):
     return response['id']
 
 
-def find_projs_and_notify():
+def get_all_old_enough_projs(month, archive_dict):
+    """
+    Get all 002 and 003 projects which are not modified
+    in the last X months. Exclude projects: staging 52 and
+    staging 53 as they will be processed separately + exclude projects
+    which had been archived.
 
-    log.info('Running Code A')
+    Input:
+        month: duration of inactivity in the last x month
+        archive_dict: the archive pickle to remember what file to be archived
 
-    dx_login()
+    Returns (dict):
+        dictionary of key (proj-id) and
+        value (describe JSON from dxpy for the proj)
 
-    archive_pickle = read_or_new_pickle(ARCHIVE_PICKLE_PATH)
-
-    # special notify include those projs / directories in staging52/53
-    # which has been tagged 'no-archive' before but has not been modified
-    # for X months. It will be listed under its own column in Slack msg
-    # to make it more visible
-    special_notify = []
+    """
 
     # Get all 002 and 003 projects
     projects_dict = dict()
@@ -289,15 +292,76 @@ def find_projs_and_notify():
     # sieve the dict to include only old-enough projs
     old_enough_projects_dict = {
         k: v for k, v in projects_dict.items() if older_than(
-            MONTH, v['describe']['modified'])}
+            month, v['describe']['modified'])}
 
     excluded_list = [PROJECT_52, PROJECT_53]
 
     # exclude projs (staging52/53) and archived projs
     old_enough_projects_dict = {
         k: v for k, v in old_enough_projects_dict.items()
-        if k not in excluded_list and k not in archive_pickle['archived']
+        if k not in excluded_list and k not in archive_dict['archived']
     }
+
+    return old_enough_projects_dict
+
+
+def archive_skip_function(dir, proj, archive_dict, temp_dict, num):
+    """
+    Function to archive directories in staging52 / 53.
+    If there is 'no-archive' tag in any file within the directory,
+    the dir will be skipped, folder is remembered in archive_pickle['skipped']
+
+    If there is no tag in any files, file will be archived.
+
+    Input:
+        dir: directory in staging52/53
+        proj: either staging52 / 53
+        archive_dict: the archive pickle for remembering skipped and
+                        archived files
+        temp_dict: temporary dictionary for slack notification later
+        num: either 52 / 53
+
+    Returns:
+        None
+    """
+
+    folders = list(dx.find_data_objects(
+        project=proj,
+        folder=dir,
+        tags=['no-archive']
+        ))
+
+    if folders:
+        log.info(f'Skipped {dir} in staging{num}')
+        archive_dict['skipped'].append(dir)
+    else:
+        log.info(f'archiving staging{num}: {dir}')
+        # dx.api.project_archive(
+        #     proj, input_params={'folder': dir})
+        archive_dict[f'archived_{num}'].append(dir)
+        temp_dict['archived'].append(f'{proj}:{dir}')
+
+
+def find_projs_and_notify():
+    """
+    Function to find projs or directories in staging52/53
+    which has not been modified in the last X months (inactive)
+    and send Slack notification about it.
+    """
+
+    log.info('Running Code A')
+
+    dx_login()
+
+    archive_pickle = read_or_new_pickle(ARCHIVE_PICKLE_PATH)
+
+    # special notify include those projs / directories in staging52/53
+    # which has been tagged 'no-archive' before but has not been modified
+    # for X months. It will be listed under its own column in Slack msg
+    # to make it more visible
+    special_notify = []
+
+    old_enough_projects_dict = get_all_old_enough_projs(MONTH, archive_pickle)
 
     log.info(f'No. of old enough projects: {len(old_enough_projects_dict)}')
 
@@ -321,17 +385,20 @@ def find_projs_and_notify():
         (file.lstrip('/').lstrip('/processed'), PROJECT_53, '53', file)
         for file in all_folders_in_53 if file not in excluded_directories]
 
-    # all_52_dirs = directories_in_52 + directories_in_52_processed
+    # combine both directories
     all_directories = \
         directories_in_52 + directories_in_52_processed + directories_in_53
     archived_dirs = \
         archive_pickle['archived_52'] + archive_pickle['archived_53']
 
+    # remove dirs which had been archived
     all_directories = [
         dir for dir in all_directories if dir[3] not in archived_dirs]
 
     log.info(f'Processing {len(all_directories)} directories in staging52/53')
 
+    # check if directories have 002 projs made and 002 has not been modified
+    # in the last X month
     old_enough_directories = [
         file for file in all_directories if check_dir(file[0], MONTH)]
 
@@ -342,6 +409,9 @@ def find_projs_and_notify():
         log.info('Saving project-id to pickle')
 
         for k, v in old_enough_projects_dict.items():
+            # if there's 'no-archive' tag for the proj
+            # remove it and put it in to-be-archived list & special notify
+            # section for Slack notification
             if 'no-archive' in [tag.lower() for tag in v['describe']['tags']]:
                 id = remove_proj_tag(k)
                 log.info(f'REMOVE_TAG: {id}')
@@ -357,9 +427,9 @@ def find_projs_and_notify():
         log.info('Saving directories')
 
         for _, proj, file_num, original_dir in old_enough_directories:
+            # if-clause: remove tag from files tagged with 'no-archive'
+            # and put it in special notify
             if original_dir in archive_pickle['skipped']:
-                print('found it')
-
                 log.info(f'REMOVE_TAG: {original_dir} in skipped')
                 files = list(dx.find_data_objects(
                     project=proj,
@@ -393,7 +463,7 @@ def find_projs_and_notify():
           list(set(special_notify))
         ]
 
-    # send slack notification if there's old-enough dir
+    # send slack notification if there's old-enough dir / projs
     for index, data in enumerate(lists):
         if data:
             post_message_to_slack(
@@ -409,25 +479,16 @@ def find_projs_and_notify():
     log.info('End of Code A')
 
 
-def archive_skip_function(dir, proj, archive_dict, temp_dict, num):
-    folders = list(dx.find_data_objects(
-        project=proj,
-        folder=dir,
-        tags=['no-archive']
-        ))
-
-    if folders:
-        log.info(f'Skipped {dir} in staging{num}')
-        archive_dict['skipped'].append(dir)
-    else:
-        log.info(f'archiving staging{num}: {dir}')
-        # dx.api.project_archive(
-        #     proj, input_params={'folder': dir})
-        archive_dict[f'archived_{num}'].append(dir)
-        temp_dict['archived'].append(f'{proj}:{dir}')
-
-
 def archiving_function():
+    """
+    Function to check previously listed projs and dirs
+    which have not been modified (inactive) in the last X months
+    and do the archiving.
+
+    Skip projs tagged 'no-archive' or any directory with one file within
+    tagged with 'no-archive'
+
+    """
 
     log.info('Running Code B')
 
