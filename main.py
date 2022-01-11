@@ -409,7 +409,7 @@ def find_projs_and_notify():
     log.info('End of Code A')
 
 
-def archive_skip_function(dir, proj, archive_dict, temp_dict):
+def archive_skip_function(dir, proj, archive_dict, temp_dict, num):
     folders = list(dx.find_data_objects(
         project=proj,
         folder=dir,
@@ -417,13 +417,13 @@ def archive_skip_function(dir, proj, archive_dict, temp_dict):
         ))
 
     if folders:
-        log.info(f'Skipped {dir} in staging52')
+        log.info(f'Skipped {dir} in staging{num}')
         archive_dict['skipped'].append(dir)
     else:
-        log.info(f'archiving staging52: {dir}')
+        log.info(f'archiving staging{num}: {dir}')
         # dx.api.project_archive(
         #     proj, input_params={'folder': dir})
-        archive_dict['archived_52'].append(dir)
+        archive_dict[f'archived_{num}'].append(dir)
         temp_dict['archived'].append(f'{proj}:{dir}')
 
 
@@ -462,44 +462,12 @@ def archiving_function():
     if list_of_dirs_52:
         for dir in list_of_dirs_52:
             archive_skip_function(
-                dir, PROJECT_52, archive_pickle, temp_archived)
-            # folders = list(dx.find_data_objects(
-            #     project=PROJECT_52,
-            #     folder=dir,
-            #     tags=['no-archive']
-            #     ))
-
-            # if folders:
-            #     log.info(f'Skipped {dir} in staging52')
-            #     archive_pickle['skipped'].append(dir)
-            #     continue
-            # else:
-            #     log.info(f'archiving staging52: {dir}')
-            #     # dx.api.project_archive(
-            #     #     PROJECT_52, input_params={'folder': dir})
-            #     archive_pickle['archived_52'].append(dir)
-            #     temp_archived['archived'].append(f'{PROJECT_52}:{dir}')
+                dir, PROJECT_52, archive_pickle, temp_archived, '52')
 
     if list_of_dirs_53:
         for dir in list_of_dirs_53:
             archive_skip_function(
-                dir, PROJECT_53, archive_pickle, temp_archived)
-            # folders = list(dx.find_data_objects(
-            #     project=PROJECT_53,
-            #     folder=dir,
-            #     tags=['no-archive']
-            #     ))
-
-            # if folders:
-            #     log.info(f'Skipped {dir} in staging53')
-            #     archive_pickle['skipped'].append(dir)
-            #     continue
-            # else:
-            #     log.info(f'archiving staging53: {dir}')
-            #     # dx.api.project_archive(
-            #     #     PROJECT_53, input_params={'folder': dir})
-            #     archive_pickle['archived_53'].append(dir)
-            #     temp_archived['archived'].append(f'{PROJECT_53}:{dir}')
+                dir, PROJECT_53, archive_pickle, temp_archived, '53')
 
     # generate archiving log file
     if os.path.isfile(ARCHIVED_TXT_PATH):
