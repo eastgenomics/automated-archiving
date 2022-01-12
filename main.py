@@ -464,7 +464,7 @@ def find_projs_and_notify(archive_pickle):
     and send Slack notification about it.
     """
 
-    log.info('Running Code A')
+    log.info('Start finding projs and notify')
 
     dx_login()
 
@@ -593,7 +593,7 @@ def find_projs_and_notify(archive_pickle):
     with open(ARCHIVE_PICKLE_PATH, 'wb') as f:
         pickle.dump(archive_pickle, f)
 
-    log.info('End of Code A')
+    log.info('End of finding projs and notify')
 
 
 def archiving_function(archive_pickle):
@@ -607,7 +607,7 @@ def archiving_function(archive_pickle):
 
     """
 
-    log.info('Running Code B')
+    log.info('Start archiving')
 
     dx_login()
 
@@ -668,7 +668,7 @@ def archiving_function(archive_pickle):
     with open(ARCHIVE_PICKLE_PATH, 'wb') as f:
         pickle.dump(archive_pickle, f)
 
-    log.info('End of Code B')
+    log.info('End of archiving')
 
     find_projs_and_notify(archive_pickle)
 
