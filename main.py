@@ -22,6 +22,13 @@ import datetime as dt
 from dateutil.relativedelta import relativedelta
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
+
+# for sending helpdesk email
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.utils import COMMASPACE, formatdate
+
 from helper import get_logger
 
 log = get_logger("main log")
@@ -34,6 +41,11 @@ PROJECT_53 = os.environ['PROJECT_53']
 MONTH = int(os.environ['AUTOMATED_MONTH'])
 ARCHIVE_PICKLE_PATH = os.environ['AUTOMATED_ARCHIVE_PICKLE_PATH']
 ARCHIVED_TXT_PATH = os.environ['AUTOMATED_ARCHIVED_TXT_PATH']
+SLACK_TOKEN = os.environ['SLACK_TOKEN']
+SERVER = os.environ['ANSIBLE_SERVER']
+PORT = os.environ['ANSIBLE_PORT']
+SENDER = os.environ['ANSIBLE_SENDER']
+RECEIVERS = os.environ['TEST_RECEIVERS']
 
 
 def post_message_to_slack(channel, index, data, error='', alert=False):
@@ -56,6 +68,8 @@ def post_message_to_slack(channel, index, data, error='', alert=False):
     http = requests.Session()
     retries = Retry(total=3, backoff_factor=1, method_whitelist=['POST'])
     http.mount("https://", HTTPAdapter(max_retries=retries))
+
+    receivers = RECEIVERS.split(',') if ',' in RECEIVERS else [RECEIVERS]
 
     lists = [
         'proj_list',
@@ -90,41 +104,73 @@ def post_message_to_slack(channel, index, data, error='', alert=False):
 
             response = http.post(
                 'https://slack.com/api/chat.postMessage', {
-                    'token': os.environ['SLACK_TOKEN'],
-                    'channel': f'U02HPRQ9X7Z',
+                    'token': SLACK_TOKEN,
+                    'channel': f'#{channel}',
                     'text': error_msg
                 }).json()
 
-            if response['ok']:
-                log.info(f'POST request to channel #{channel} successful')
-            else:
-                # slack api request failed
-                error_code = response['error']
-                log.error(f'Slack API error to #{channel}')
-                log.error(f'Error Code From Slack: {error_code}')
         else:
             # default notification
             response = http.post(
                 'https://slack.com/api/chat.postMessage', {
-                    'token': os.environ['SLACK_TOKEN'],
-                    'channel': f'U02HPRQ9X7Z',
+                    'token': SLACK_TOKEN,
+                    'channel': f'#{channel}',
                     'attachments': json.dumps([{
                         "pretext": messages[index],
                         "text": text_data}])
                 }).json()
 
-            if response['ok']:
-                log.info(f'POST request to channel #{channel} successful')
-            else:
-                # slack api request failed
-                error_code = response['error']
-                log.error(f'Slack API error to #{channel}')
-                log.error(f'Error Code From Slack: {error_code}')
+        if response['ok']:
+            log.info(f'POST request to channel #{channel} successful')
+        else:
+            # slack api request failed
+            error_code = response['error']
+            log.error(f'Slack API error to #{channel}')
+            log.error(f'Error Code From Slack: {error_code}')
+
+            send_mail(
+                SENDER,
+                receivers,
+                'Automated Archiving Slack API Token Error',
+                'Error with Automated Archiving Slack API Token'
+                )
+            log.info('End of script')
+            sys.exit()
 
     except Exception as e:
         # endpoint request fail from server
         log.error(f'Error sending POST request to channel #{channel}')
         log.error(e)
+
+        send_mail(
+            SENDER,
+            receivers,
+            'Automated Archiving Slack Post Request Failed (Server Error)',
+            'Error with Automated Archiving post request to Slack'
+            )
+        log.info('End of script')
+        sys.exit()
+
+
+def send_mail(send_from, send_to, subject, text):
+    assert isinstance(send_to, list)
+
+    msg = MIMEMultipart()
+    msg['From'] = send_from
+    msg['To'] = COMMASPACE.join(send_to)
+    msg['Date'] = formatdate(localtime=True)
+    msg['Subject'] = subject
+
+    msg.attach(MIMEText(text))
+
+    try:
+        smtp = smtplib.SMTP(SERVER, PORT)
+        smtp.sendmail(send_from, send_to, msg.as_string())
+        smtp.close()
+        log.info('Server help email SENT')
+
+    except Exception as e:
+        log.error('Server error email FAILED')
 
 
 def read_or_new_pickle(path):
@@ -543,6 +589,7 @@ def find_projs_and_notify(archive_pickle):
                 )
 
     # save dict
+    log.info('Writing into pickle file')
     with open(ARCHIVE_PICKLE_PATH, 'wb') as f:
         pickle.dump(archive_pickle, f)
 
@@ -617,6 +664,7 @@ def archiving_function(archive_pickle):
     archive_pickle['staging_53'] = []
 
     # save dict
+    log.info('Writing into pickle file')
     with open(ARCHIVE_PICKLE_PATH, 'wb') as f:
         pickle.dump(archive_pickle, f)
 
