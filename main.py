@@ -66,7 +66,7 @@ def post_message_to_slack(channel, index, data, error='', alert=False):
     """
 
     http = requests.Session()
-    retries = Retry(total=3, backoff_factor=1, method_whitelist=['POST'])
+    retries = Retry(total=5, backoff_factor=10, method_whitelist=['POST'])
     http.mount("https://", HTTPAdapter(max_retries=retries))
 
     receivers = RECEIVERS.split(',') if ',' in RECEIVERS else [RECEIVERS]
