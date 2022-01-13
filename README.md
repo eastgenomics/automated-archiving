@@ -6,6 +6,27 @@ Check for 002, 003 projects, directories in staging52 and staging53 which are no
 ## Typical use case
 Monthly check for archivable projects or directories on DNANexus & send Slack notification
 
+## Archive Pickle
+The script generates a pickle file at location specified at `AUTOMATED_ARCHIVE_PICKLE_PATH`. This acts as the memory of the script to remember to-be-archived projects and files + all archived projects.
+
+## Script Workflow
+When the script is executed, it checks if there's any 'to-be-archived' in its memory (to_be_archived, staging52, staging53). 
+```
+archive_pickle = read_or_new_pickle(ARCHIVE_PICKLE_PATH)
+to_be_archived = archive_pickle['to_be_archived']
+staging52 = archive_pickle['staging_52']
+staging53 = archive_pickle['staging_53']
+
+if to_be_archived or staging52 or staging53:
+    archiving_function(archive_pickle)
+else:
+    find_projs_and_notify(archive_pickle)
+```
+If there is, it runs the archiving function, skipping those tagged with either `no-archive` or `never-archive`. 
+
+If there is nothing in all three lists, it proceeds to find projects and directories which have been inactive for the last X months.
+
+
 ## Configs required
 A config file (txt) with variables:
 - `DNANEXUS_TOKEN` : DNANexus API Token
@@ -15,14 +36,34 @@ A config file (txt) with variables:
 - `AUTOMATED_MONTH` : Inactivty period (e.g. 4/5/6)
 - `AUTOMATED_ARCHIVE_PICKLE_PATH` : pickle file directory
 - `AUTOMATED_ARCHIVED_TXT_PATH` : directory to output txt file listing all archived projects & directories
+- `ANSIBLE_SERVER`: (for sending helpdesk email) server host
+- `ANSIBLE_PORT`: (for sending helpdesk email) server port
+- `SENDER`: (for sending helpdesk email) BioinformaticsTeamGeneticsLab@addenbrookes.nhs.uk
+- `RECEIVERS`: (for sending helpdesk email) emails separated by comma (e.g. abc.domain,bbc.domain)
 
 ## Logging
 The main logging script is `helper.py`
 
 The script will generate a log file `automated-archiving.log` in `/var/log/monitoring`
 
+## Tags
+There are two tags recognized by the script:
+- `no-archive`
+- `never-archive`
+
+#### no-archive
+Projects tagged will temporarily bypass archiving. For directories in staging52 and staging53, if one or more files within a directory (`/210202_A12905_003`) is tagged, the whole directory will temporarily bypass archiving. 
+
+The tag will be removed if a project or directory remain inactive for X months.
+
+#### never-archive
+Projects tagged will bypass archiving indefintely, same goes to any directory within staging52 and staging53.
+
+
 ## Output file
-The script will generate a txt file `archived.txt` at the location `AUTOMATED_ARCHIVED_TXT_PATH`. The text file list all the archived project-id, directories in `staging52` and `staging53`
+The script will generate a txt file `archived.txt` at the location specified at `AUTOMATED_ARCHIVED_TXT_PATH`. 
+
+The text file list all the archived project-id, directories in `staging52` and `staging53`
 
 ## Docker
 `Dockerfile` is included for rebuilding docker image
