@@ -43,10 +43,10 @@ MONTH3 = int(os.environ['AUTOMATED_MONTH_003'])
 ARCHIVE_PICKLE_PATH = os.environ['AUTOMATED_ARCHIVE_PICKLE_PATH']
 ARCHIVED_TXT_PATH = os.environ['AUTOMATED_ARCHIVED_TXT_PATH']
 SLACK_TOKEN = os.environ['SLACK_TOKEN']
-# SERVER = os.environ['ANSIBLE_SERVER']
-# PORT = os.environ['ANSIBLE_PORT']
-# SENDER = os.environ['ANSIBLE_SENDER']
-# RECEIVERS = os.environ['TEST_RECEIVERS']
+SERVER = os.environ['ANSIBLE_SERVER']
+PORT = os.environ['ANSIBLE_PORT']
+SENDER = os.environ['ANSIBLE_SENDER']
+RECEIVERS = os.environ['TEST_RECEIVERS']
 
 
 def post_message_to_slack(channel, index, data, error='', alert=False):
@@ -70,7 +70,7 @@ def post_message_to_slack(channel, index, data, error='', alert=False):
     retries = Retry(total=5, backoff_factor=10, method_whitelist=['POST'])
     http.mount("https://", HTTPAdapter(max_retries=retries))
 
-    # receivers = RECEIVERS.split(',') if ',' in RECEIVERS else [RECEIVERS]
+    receivers = RECEIVERS.split(',') if ',' in RECEIVERS else [RECEIVERS]
 
     lists = [
         'proj_list',
@@ -129,12 +129,12 @@ def post_message_to_slack(channel, index, data, error='', alert=False):
             log.error(f'Slack API error to #{channel}')
             log.error(f'Error Code From Slack: {error_code}')
 
-            # send_mail(
-            #     SENDER,
-            #     receivers,
-            #     'Automated Archiving Slack API Token Error',
-            #     'Error with Automated Archiving Slack API Token'
-            #     )
+            send_mail(
+                SENDER,
+                receivers,
+                'Automated Archiving Slack API Token Error',
+                'Error with Automated Archiving Slack API Token'
+                )
             log.info('End of script')
             sys.exit()
 
@@ -143,35 +143,35 @@ def post_message_to_slack(channel, index, data, error='', alert=False):
         log.error(f'Error sending POST request to channel #{channel}')
         log.error(e)
 
-        # send_mail(
-        #     SENDER,
-        #     receivers,
-        #     'Automated Archiving Slack Post Request Failed (Server Error)',
-        #     'Error with Automated Archiving post request to Slack'
-        #     )
+        send_mail(
+            SENDER,
+            receivers,
+            'Automated Archiving Slack Post Request Failed (Server Error)',
+            'Error with Automated Archiving post request to Slack'
+            )
         log.info('End of script')
         sys.exit()
 
 
-# def send_mail(send_from, send_to, subject, text):
-#     assert isinstance(send_to, list)
+def send_mail(send_from, send_to, subject, text):
+    assert isinstance(send_to, list)
 
-#     msg = MIMEMultipart()
-#     msg['From'] = send_from
-#     msg['To'] = COMMASPACE.join(send_to)
-#     msg['Date'] = formatdate(localtime=True)
-#     msg['Subject'] = subject
+    msg = MIMEMultipart()
+    msg['From'] = send_from
+    msg['To'] = COMMASPACE.join(send_to)
+    msg['Date'] = formatdate(localtime=True)
+    msg['Subject'] = subject
 
-#     msg.attach(MIMEText(text))
+    msg.attach(MIMEText(text))
 
-#     try:
-#         smtp = smtplib.SMTP(SERVER, PORT)
-#         smtp.sendmail(send_from, send_to, msg.as_string())
-#         smtp.close()
-#         log.info('Server help email SENT')
+    try:
+        smtp = smtplib.SMTP(SERVER, PORT)
+        smtp.sendmail(send_from, send_to, msg.as_string())
+        smtp.close()
+        log.info('Server help email SENT')
 
-#     except Exception as e:
-#         log.error('Server error email FAILED')
+    except Exception as e:
+        log.error('Server error email FAILED')
 
 
 def read_or_new_pickle(path):
