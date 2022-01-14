@@ -38,14 +38,15 @@ load_dotenv()
 
 PROJECT_52 = os.environ['PROJECT_52']
 PROJECT_53 = os.environ['PROJECT_53']
-MONTH = int(os.environ['AUTOMATED_MONTH'])
+MONTH2 = int(os.environ['AUTOMATED_MONTH_002'])
+MONTH3 = int(os.environ['AUTOMATED_MONTH_003'])
 ARCHIVE_PICKLE_PATH = os.environ['AUTOMATED_ARCHIVE_PICKLE_PATH']
 ARCHIVED_TXT_PATH = os.environ['AUTOMATED_ARCHIVED_TXT_PATH']
 SLACK_TOKEN = os.environ['SLACK_TOKEN']
-SERVER = os.environ['ANSIBLE_SERVER']
-PORT = os.environ['ANSIBLE_PORT']
-SENDER = os.environ['ANSIBLE_SENDER']
-RECEIVERS = os.environ['TEST_RECEIVERS']
+# SERVER = os.environ['ANSIBLE_SERVER']
+# PORT = os.environ['ANSIBLE_PORT']
+# SENDER = os.environ['ANSIBLE_SENDER']
+# RECEIVERS = os.environ['TEST_RECEIVERS']
 
 
 def post_message_to_slack(channel, index, data, error='', alert=False):
@@ -69,7 +70,7 @@ def post_message_to_slack(channel, index, data, error='', alert=False):
     retries = Retry(total=5, backoff_factor=10, method_whitelist=['POST'])
     http.mount("https://", HTTPAdapter(max_retries=retries))
 
-    receivers = RECEIVERS.split(',') if ',' in RECEIVERS else [RECEIVERS]
+    # receivers = RECEIVERS.split(',') if ',' in RECEIVERS else [RECEIVERS]
 
     lists = [
         'proj_list',
@@ -105,7 +106,7 @@ def post_message_to_slack(channel, index, data, error='', alert=False):
             response = http.post(
                 'https://slack.com/api/chat.postMessage', {
                     'token': SLACK_TOKEN,
-                    'channel': f'#{channel}',
+                    'channel': f'U02HPRQ9X7Z',
                     'text': error_msg
                 }).json()
 
@@ -114,7 +115,7 @@ def post_message_to_slack(channel, index, data, error='', alert=False):
             response = http.post(
                 'https://slack.com/api/chat.postMessage', {
                     'token': SLACK_TOKEN,
-                    'channel': f'#{channel}',
+                    'channel': f'U02HPRQ9X7Z',
                     'attachments': json.dumps([{
                         "pretext": messages[index],
                         "text": text_data}])
@@ -128,12 +129,12 @@ def post_message_to_slack(channel, index, data, error='', alert=False):
             log.error(f'Slack API error to #{channel}')
             log.error(f'Error Code From Slack: {error_code}')
 
-            send_mail(
-                SENDER,
-                receivers,
-                'Automated Archiving Slack API Token Error',
-                'Error with Automated Archiving Slack API Token'
-                )
+            # send_mail(
+            #     SENDER,
+            #     receivers,
+            #     'Automated Archiving Slack API Token Error',
+            #     'Error with Automated Archiving Slack API Token'
+            #     )
             log.info('End of script')
             sys.exit()
 
@@ -142,35 +143,35 @@ def post_message_to_slack(channel, index, data, error='', alert=False):
         log.error(f'Error sending POST request to channel #{channel}')
         log.error(e)
 
-        send_mail(
-            SENDER,
-            receivers,
-            'Automated Archiving Slack Post Request Failed (Server Error)',
-            'Error with Automated Archiving post request to Slack'
-            )
+        # send_mail(
+        #     SENDER,
+        #     receivers,
+        #     'Automated Archiving Slack Post Request Failed (Server Error)',
+        #     'Error with Automated Archiving post request to Slack'
+        #     )
         log.info('End of script')
         sys.exit()
 
 
-def send_mail(send_from, send_to, subject, text):
-    assert isinstance(send_to, list)
+# def send_mail(send_from, send_to, subject, text):
+#     assert isinstance(send_to, list)
 
-    msg = MIMEMultipart()
-    msg['From'] = send_from
-    msg['To'] = COMMASPACE.join(send_to)
-    msg['Date'] = formatdate(localtime=True)
-    msg['Subject'] = subject
+#     msg = MIMEMultipart()
+#     msg['From'] = send_from
+#     msg['To'] = COMMASPACE.join(send_to)
+#     msg['Date'] = formatdate(localtime=True)
+#     msg['Subject'] = subject
 
-    msg.attach(MIMEText(text))
+#     msg.attach(MIMEText(text))
 
-    try:
-        smtp = smtplib.SMTP(SERVER, PORT)
-        smtp.sendmail(send_from, send_to, msg.as_string())
-        smtp.close()
-        log.info('Server help email SENT')
+#     try:
+#         smtp = smtplib.SMTP(SERVER, PORT)
+#         smtp.sendmail(send_from, send_to, msg.as_string())
+#         smtp.close()
+#         log.info('Server help email SENT')
 
-    except Exception as e:
-        log.error('Server error email FAILED')
+#     except Exception as e:
+#         log.error('Server error email FAILED')
 
 
 def read_or_new_pickle(path):
@@ -308,7 +309,7 @@ def remove_proj_tag(proj):
     return response['id']
 
 
-def get_all_old_enough_projs(month, archive_dict):
+def get_all_old_enough_projs(month2, month3, archive_dict):
     """
     Get all 002 and 003 projects which are not modified
     in the last X months. Exclude projects: staging 52 and
@@ -326,22 +327,37 @@ def get_all_old_enough_projs(month, archive_dict):
     """
 
     # Get all 002 and 003 projects
-    projects_dict = dict()
+    projects_dict_002 = dict()
+    projects_dict_003 = dict()
 
-    projects = dx.search.find_projects(
-        name='00[2,3].*',
+    projects002 = list(dx.search.find_projects(
+        name='^002.*',
         name_mode='regexp',
         billed_to='org-emee_1',
         describe=True
-        )
+        ))
+
+    projects003 = list(dx.search.find_projects(
+        name='^003.*',
+        name_mode='regexp',
+        billed_to='org-emee_1',
+        describe=True
+        ))
 
     # put all projects into a dict
-    projects_dict.update({proj['id']: proj for proj in list(projects)})
+    projects_dict_002.update({proj['id']: proj for proj in projects002})
+    projects_dict_003.update({proj['id']: proj for proj in projects003})
 
     # sieve the dict to include only old-enough projs
+    old_enough_projects_dict_002 = {
+        k: v for k, v in projects_dict_002.items() if older_than(
+            month2, v['describe']['modified'])}
+    old_enough_projects_dict_003 = {
+        k: v for k, v in projects_dict_003.items() if older_than(
+            month3, v['describe']['modified'])}
+
     old_enough_projects_dict = {
-        k: v for k, v in projects_dict.items() if older_than(
-            month, v['describe']['modified'])}
+        **old_enough_projects_dict_002, **old_enough_projects_dict_003}
 
     excluded_list = [PROJECT_52, PROJECT_53]
 
@@ -476,7 +492,8 @@ def find_projs_and_notify(archive_pickle):
     to_be_archived_list = []
 
     # get all old enough projects
-    old_enough_projects_dict = get_all_old_enough_projs(MONTH, archive_pickle)
+    old_enough_projects_dict = get_all_old_enough_projs(
+        MONTH2, MONTH3, archive_pickle)
 
     log.info(f'No. of old enough projects: {len(old_enough_projects_dict)}')
 
@@ -488,7 +505,7 @@ def find_projs_and_notify(archive_pickle):
     # check if directories have 002 projs made and 002 has not been modified
     # in the last X month
     old_enough_directories = [
-        file for file in all_directories if check_dir(file[0], MONTH)]
+        file for file in all_directories if check_dir(file[0], MONTH2)]
 
     log.info(f'No. of old enough directories: {len(old_enough_directories)}')
 
@@ -550,7 +567,7 @@ def find_projs_and_notify(archive_pickle):
                 # if no, remove tag and list for special notify
                 # if yes, continue
                 if any([older_than(
-                        MONTH, f['describe']['modified']) for f in files]):
+                        MONTH2, f['describe']['modified']) for f in files]):
 
                     log.info(
                         f'REMOVE_TAG: removing tag for {len(files)} files')

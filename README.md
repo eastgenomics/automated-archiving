@@ -33,7 +33,8 @@ A config file (txt) with variables:
 - `SLACK_TOKEN` : Slack Bot API Token
 - `PROJECT_52` : project-id
 - `PROJECT_53` : project-id
-- `AUTOMATED_MONTH` : Inactivty period (e.g. 4/5/6)
+- `AUTOMATED_MONTH_002` : Period of file being inactive after which to archive (months)
+- `AUTOMATED_MONTH_003` : Period of file being inactive after which to archive (months) for 003 projects
 - `AUTOMATED_ARCHIVE_PICKLE_PATH` : pickle file directory
 - `AUTOMATED_ARCHIVED_TXT_PATH` : directory to output txt file listing all archived projects & directories
 - `ANSIBLE_SERVER`: (for sending helpdesk email) server host
