@@ -106,7 +106,7 @@ def post_message_to_slack(channel, index, data, error='', alert=False):
             response = http.post(
                 'https://slack.com/api/chat.postMessage', {
                     'token': SLACK_TOKEN,
-                    'channel': f'U02HPRQ9X7Z',
+                    'channel': f'#{channel}',
                     'text': error_msg
                 }).json()
 
@@ -115,7 +115,7 @@ def post_message_to_slack(channel, index, data, error='', alert=False):
             response = http.post(
                 'https://slack.com/api/chat.postMessage', {
                     'token': SLACK_TOKEN,
-                    'channel': f'U02HPRQ9X7Z',
+                    'channel': f'#{channel}',
                     'attachments': json.dumps([{
                         "pretext": messages[index],
                         "text": text_data}])
