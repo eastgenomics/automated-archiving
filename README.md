@@ -26,6 +26,7 @@ If there is, it runs the archiving function, skipping those tagged with either `
 
 If there is nothing in all three lists, it proceeds to find projects and directories which have been inactive for the last X months.
 
+![script workflow](archive.png)
 
 ## Configs required
 A config file (txt) with variables:
