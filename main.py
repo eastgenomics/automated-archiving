@@ -49,7 +49,7 @@ SENDER = os.environ['ANSIBLE_SENDER']
 RECEIVERS = os.environ['TEST_RECEIVERS']
 
 
-def post_message_to_slack(channel, index, data, error='', alert=False):
+def post_message_to_slack(channel, index, data, error='', alert=False) -> None:
     """
     Request function for slack web api for:
     (1) send alert msg when dxpy auth failed (alert=True)
@@ -153,7 +153,19 @@ def post_message_to_slack(channel, index, data, error='', alert=False):
         sys.exit()
 
 
-def send_mail(send_from, send_to, subject, text):
+def send_mail(send_from, send_to, subject, text) -> None:
+    """
+    Function to send email to helpdesk
+
+    Inputs:
+        send_from: BioinformaticsTeamGeneticsLab@addenbrookes.nhs.uk
+        send_to: list of emails
+        subject: message subject
+        text: message body
+
+    Return:
+        None
+    """
     assert isinstance(send_to, list)
 
     msg = MIMEMultipart()
@@ -174,7 +186,7 @@ def send_mail(send_from, send_to, subject, text):
         log.error('Server error email FAILED')
 
 
-def read_or_new_pickle(path):
+def read_or_new_pickle(path) -> dict:
     """
     Read stored pickle memory for the script
     Using defaultdict() automatically create new dict.key()
@@ -214,7 +226,7 @@ def older_than(month, modified_epoch) -> bool:
     return date + relativedelta(months=+month) < dt.datetime.today()
 
 
-def check_dir(dir, month):
+def check_dir(dir, month) -> bool:
     """
     Function to check if project (002) for that directory
     exist. e.g. For 210407_A01295_0010_AHWL5GDRXX
@@ -249,7 +261,7 @@ def check_dir(dir, month):
         return False
 
 
-def dx_login():
+def dx_login() -> None:
     """
     DNANexus login check function
 
@@ -285,7 +297,7 @@ def dx_login():
         sys.exit()
 
 
-def remove_proj_tag(proj):
+def remove_proj_tag(proj) -> str:
     """
     Function to remove tag 'no-archive' for project
 
@@ -309,7 +321,7 @@ def remove_proj_tag(proj):
     return response['id']
 
 
-def get_all_old_enough_projs(month2, month3, archive_dict):
+def get_all_old_enough_projs(month2, month3, archive_dict) -> dict:
     """
     Get all 002 and 003 projects which are not modified
     in the last X months. Exclude projects: staging 52 and
@@ -424,7 +436,7 @@ def get_all_dirs(archive_dict, proj_52, proj_53) -> list:
     return all_directories
 
 
-def archive_skip_function(dir, proj, archive_dict, temp_dict, num):
+def archive_skip_function(dir, proj, archive_dict, temp_dict, num) -> None:
     """
     Function to archive directories in staging52 / 53.
 
@@ -578,7 +590,7 @@ def find_projs_and_notify(archive_pickle):
                                 'tags': ['no-archive'],
                                 'project': proj})
                     special_notify.append(
-                        f'{original_dir} in staging{file_num}')
+                        f'{original_dir} in `staging{file_num}`')
                     archive_pickle[f'staging_{file_num}'].append(original_dir)
                 else:
                     log.info(f'SKIPPED: {original_dir} in staging{file_num}')
