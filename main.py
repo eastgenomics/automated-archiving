@@ -605,10 +605,11 @@ def find_projs_and_notify(archive_pickle):
                 data=data
                 )
 
-    # save dict
-    log.info('Writing into pickle file')
-    with open(ARCHIVE_PICKLE_PATH, 'wb') as f:
-        pickle.dump(archive_pickle, f)
+    # save dict (only if there's to-be-archived)
+    if proj_list or folders52 or folders53:
+        log.info('Writing into pickle file')
+        with open(ARCHIVE_PICKLE_PATH, 'wb') as f:
+            pickle.dump(archive_pickle, f)
 
     log.info('End of finding projs and notify')
 
