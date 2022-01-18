@@ -75,7 +75,6 @@ def post_message_to_slack(channel, index, data, error='', alert=False) -> None:
     lists = [
         'proj_list',
         'folders52',
-        'folders53',
         'special_notify',
         'error'
         ]
@@ -88,7 +87,6 @@ def post_message_to_slack(channel, index, data, error='', alert=False) -> None:
     messages = [
         f':file_folder: {today} *Projects which will be archived:*',
         f':file_folder: {today} *Directories in `staging52` to be archived:*',
-        f':file_folder: {today} *Directories in `staging53` to be archived:*',
         (f':bangbang: {today} *Inactive projects or directories to '
             'be archived unless re-tag `no-archive`:*')
         ]
@@ -287,7 +285,7 @@ def dx_login() -> None:
 
         post_message_to_slack(
             'egg-alerts',
-            4,
+            3,
             [],
             error=e,
             alert=True
@@ -307,7 +305,7 @@ def remove_proj_tag(proj) -> str:
     notified to be archived
 
     This only applies to project-id
-    Not directories in Staging52 & 53
+    Not directories in Staging52
 
     Input:
         project-id
@@ -324,8 +322,8 @@ def remove_proj_tag(proj) -> str:
 def get_all_old_enough_projs(month2, month3, archive_dict) -> dict:
     """
     Get all 002 and 003 projects which are not modified
-    in the last X months. Exclude projects: staging 52 and
-    staging 53 as they will be processed separately + exclude projects
+    in the last X months. Exclude projects: staging 52
+    as they will be processed separately + exclude projects
     which had been archived.
 
     Input:
@@ -382,7 +380,7 @@ def get_all_old_enough_projs(month2, month3, archive_dict) -> dict:
     return old_enough_projects_dict
 
 
-def get_all_dirs(archive_dict, proj_52, proj_53) -> list:
+def get_all_dirs(archive_dict, proj_52) -> list:
     """
     Function to get all directories in staging52 and 53
     Exclude those which had been archived
@@ -391,54 +389,41 @@ def get_all_dirs(archive_dict, proj_52, proj_53) -> list:
     Inputs:
         archive_dict: archive pickle to get previously archived directories
         proj_52: proj-id of staging52
-        proj_53: proj-id of staging53
 
     Return:
         List of tuple for ease of processing later on
         Tuple content:
         1. dir name (e.g. 210407_A01295_0010_AHWL5GDRXX) for 002 query
-        2. proj-id (staging52 or 53) for 002 query
-        3. string '52' or '53'
-        4. original directory path (e.g. /210407_A01295_0010_AHWL5GDRXX)
+        2. original directory path (e.g. /210407_A01295_0010_AHWL5GDRXX/)
     """
 
     staging52 = dx.DXProject(proj_52)
-    staging53 = dx.DXProject(proj_53)
 
     # get all folders in staging52
     all_folders_in_52 = staging52.list_folder(only='folders')['folders']
     directories_in_52 = [
-        (file.lstrip('/').lstrip('/processed'), proj_52, '52', file)
+        (file.lstrip('/').lstrip('/processed'), file)
         for file in all_folders_in_52 if file != '/processed']
     directories_in_52_processed = [
-        (file.lstrip('/').lstrip('/processed'), proj_52, '52', file)
+        (file.lstrip('/').lstrip('/processed'), file)
         for file in staging52.list_folder(
             '/processed', only='folders')['folders']]
 
-    # get all folders in staging53
-    excluded_directories = ['/MVZ_upload', '/Reports', '/dx_describe']
-    all_folders_in_53 = staging53.list_folder(only='folders')['folders']
-    directories_in_53 = [
-        (file.lstrip('/').lstrip('/processed'), proj_53, '53', file)
-        for file in all_folders_in_53 if file not in excluded_directories]
-
     # combine both directories
-    all_directories = \
-        directories_in_52 + directories_in_52_processed + directories_in_53
+    all_directories = directories_in_52 + directories_in_52_processed
 
     # remove dirs which had been archived
-    archived_dirs = \
-        archive_dict['archived_52'] + archive_dict['archived_53']
+    archived_dirs = archive_dict['archived_52']
 
     all_directories = [
-        dir for dir in all_directories if dir[3] not in archived_dirs]
+        dir for dir in all_directories if dir[1] not in archived_dirs]
 
     return all_directories
 
 
-def archive_skip_function(dir, proj, archive_dict, temp_dict, num) -> None:
+def archive_skip_function(dir, proj, archive_dict, temp_dict) -> None:
     """
-    Function to archive directories in staging52 / 53.
+    Function to archive directories in staging52
 
     If there is 'never-archive', return
 
@@ -449,11 +434,11 @@ def archive_skip_function(dir, proj, archive_dict, temp_dict, num) -> None:
 
     Input:
         dir: directory in staging52/53
-        proj: either staging52 / 53
+        proj: staging52
         archive_dict: the archive pickle for remembering skipped and
                         archived files
         temp_dict: temporary dictionary for slack notification later
-        num: either 52 / 53
+        num: 52
 
     Returns:
         None
@@ -466,7 +451,7 @@ def archive_skip_function(dir, proj, archive_dict, temp_dict, num) -> None:
         ))
 
     if never_archive:
-        log.info(f'NEVER_ARCHIVE {dir} in staging{num}')
+        log.info(f'NEVER_ARCHIVE {dir} in staging52')
         return
 
     folders = list(dx.find_data_objects(
@@ -476,12 +461,12 @@ def archive_skip_function(dir, proj, archive_dict, temp_dict, num) -> None:
         ))
 
     if folders:
-        log.info(f'SKIPPED {dir} in staging{num}')
+        log.info(f'SKIPPED {dir} in staging52')
     else:
-        log.info(f'archiving staging{num}: {dir}')
+        log.info(f'archiving staging52: {dir}')
         # dx.api.project_archive(
         #     proj, input_params={'folder': dir})
-        archive_dict[f'archived_{num}'].append(dir)
+        archive_dict[f'archived_52'].append(dir)
         temp_dict['archived'].append(f'{proj}:{dir}')
 
 
@@ -510,9 +495,9 @@ def find_projs_and_notify(archive_pickle):
     log.info(f'No. of old enough projects: {len(old_enough_projects_dict)}')
 
     # get all directories
-    all_directories = get_all_dirs(archive_pickle, PROJECT_52, PROJECT_53)
+    all_directories = get_all_dirs(archive_pickle, PROJECT_52)
 
-    log.info(f'Processing {len(all_directories)} directories in staging52/53')
+    log.info(f'Processing {len(all_directories)} directories in staging52')
 
     # check if directories have 002 projs made and 002 has not been modified
     # in the last X month
@@ -552,34 +537,36 @@ def find_projs_and_notify(archive_pickle):
     if old_enough_directories:
         log.info('Saving directories to pickle')
 
-        for _, proj, file_num, original_dir in old_enough_directories:
+        for _, original_dir in old_enough_directories:
             # if there's 'never-archive' tag in any file, continue
             never_archive = list(dx.find_data_objects(
-                project=proj,
+                project=PROJECT_52,
                 folder=original_dir,
                 tags=['never-archive']
             ))
 
             if never_archive:
-                log.info(f'NEVER_ARCHIVE: {original_dir} in staging{file_num}')
+                log.info(f'NEVER_ARCHIVE: {original_dir} in staging52')
                 continue
 
             # check for 'no-archive' tag in any files
             files = list(dx.find_data_objects(
-                project=proj,
+                project=PROJECT_52,
                 folder=original_dir,
                 tags=['no-archive'],
                 describe=True
             ))
 
             if not files:
-                archive_pickle[f'staging_{file_num}'].append(original_dir)
+                archive_pickle[f'staging_52'].append(original_dir)
             else:
                 # check if files are active in the last X month
                 # if no, remove tag and list for special notify
                 # if yes, continue
-                if any([older_than(
-                        MONTH2, f['describe']['modified']) for f in files]):
+                if any(
+                    [older_than(
+                        MONTH2, f['describe']['modified']) for f in files]
+                ):
 
                     log.info(
                         f'REMOVE_TAG: removing tag for {len(files)} files')
@@ -588,23 +575,21 @@ def find_projs_and_notify(archive_pickle):
                             file['id'],
                             input_params={
                                 'tags': ['no-archive'],
-                                'project': proj})
+                                'project': PROJECT_52})
                     special_notify.append(
-                        f'{original_dir} in `staging{file_num}`')
-                    archive_pickle[f'staging_{file_num}'].append(original_dir)
+                        f'{original_dir} in `staging52`')
+                    archive_pickle[f'staging_52'].append(original_dir)
                 else:
-                    log.info(f'SKIPPED: {original_dir} in staging{file_num}')
+                    log.info(f'SKIPPED: {original_dir} in staging52')
                     continue
 
     # get everything ready for slack notification
     proj_list = to_be_archived_list
     folders52 = archive_pickle['staging_52']
-    folders53 = archive_pickle['staging_53']
 
     lists = [
           list(set(proj_list)),
           list(set(folders52)),
-          list(set(folders53)),
           list(set(special_notify))
         ]
 
@@ -618,7 +603,7 @@ def find_projs_and_notify(archive_pickle):
                 )
 
     # save dict (only if there's to-be-archived)
-    if proj_list or folders52 or folders53:
+    if proj_list or folders52:
         log.info('Writing into pickle file')
         with open(ARCHIVE_PICKLE_PATH, 'wb') as f:
             pickle.dump(archive_pickle, f)
@@ -643,7 +628,6 @@ def archiving_function(archive_pickle):
 
     list_of_projs = archive_pickle['to_be_archived']
     list_of_dirs_52 = archive_pickle['staging_52']
-    list_of_dirs_53 = archive_pickle['staging_53']
 
     temp_archived = collections.defaultdict(list)
 
@@ -670,12 +654,7 @@ def archiving_function(archive_pickle):
     if list_of_dirs_52:
         for dir in list_of_dirs_52:
             archive_skip_function(
-                dir, PROJECT_52, archive_pickle, temp_archived, '52')
-
-    if list_of_dirs_53:
-        for dir in list_of_dirs_53:
-            archive_skip_function(
-                dir, PROJECT_53, archive_pickle, temp_archived, '53')
+                dir, PROJECT_52, archive_pickle, temp_archived)
 
     # generate archiving log file
     if os.path.isfile(ARCHIVED_TXT_PATH):
@@ -691,7 +670,6 @@ def archiving_function(archive_pickle):
 
     archive_pickle['to_be_archived'] = []
     archive_pickle['staging_52'] = []
-    archive_pickle['staging_53'] = []
 
     # save dict
     log.info('Writing into pickle file')
@@ -708,9 +686,8 @@ def main():
     archive_pickle = read_or_new_pickle(ARCHIVE_PICKLE_PATH)
     to_be_archived = archive_pickle['to_be_archived']
     staging52 = archive_pickle['staging_52']
-    staging53 = archive_pickle['staging_53']
 
-    if to_be_archived or staging52 or staging53:
+    if to_be_archived or staging52:
         archiving_function(archive_pickle)
     else:
         find_projs_and_notify(archive_pickle)
