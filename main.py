@@ -38,16 +38,18 @@ load_dotenv()
 
 SLACK_TOKEN = os.environ['SLACK_TOKEN']
 DNANEXUS_TOKEN = os.environ['DNANEXUS_TOKEN']
+
 PROJECT_52 = os.environ['PROJECT_52']
 PROJECT_53 = os.environ['PROJECT_53']
 MONTH2 = int(os.environ['AUTOMATED_MONTH_002'])
 MONTH3 = int(os.environ['AUTOMATED_MONTH_003'])
 ARCHIVE_PICKLE_PATH = os.environ['AUTOMATED_ARCHIVE_PICKLE_PATH']
 ARCHIVED_TXT_PATH = os.environ['AUTOMATED_ARCHIVED_TXT_PATH']
+
 SERVER = os.environ['ANSIBLE_SERVER']
 PORT = os.environ['ANSIBLE_PORT']
 SENDER = os.environ['ANSIBLE_SENDER']
-RECEIVERS = os.environ['TEST_RECEIVERS']
+RECEIVERS = os.environ['ANSIBLE_RECEIVERS']
 
 
 def post_message_to_slack(channel, index, data, error='', alert=False) -> None:
