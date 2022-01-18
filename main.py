@@ -36,13 +36,14 @@ log = get_logger("main log")
 
 load_dotenv()
 
+SLACK_TOKEN = os.environ['SLACK_TOKEN']
+DNANEXUS_TOKEN = os.environ['DNANEXUS_TOKEN']
 PROJECT_52 = os.environ['PROJECT_52']
 PROJECT_53 = os.environ['PROJECT_53']
 MONTH2 = int(os.environ['AUTOMATED_MONTH_002'])
 MONTH3 = int(os.environ['AUTOMATED_MONTH_003'])
 ARCHIVE_PICKLE_PATH = os.environ['AUTOMATED_ARCHIVE_PICKLE_PATH']
 ARCHIVED_TXT_PATH = os.environ['AUTOMATED_ARCHIVED_TXT_PATH']
-SLACK_TOKEN = os.environ['SLACK_TOKEN']
 SERVER = os.environ['ANSIBLE_SERVER']
 PORT = os.environ['ANSIBLE_PORT']
 SENDER = os.environ['ANSIBLE_SENDER']
@@ -269,7 +270,7 @@ def dx_login() -> None:
 
     DX_SECURITY_CONTEXT = {
         "auth_token_type": "Bearer",
-        "auth_token": os.environ['DNANEXUS_TOKEN']
+        "auth_token": DNANEXUS_TOKEN
         }
 
     dx.set_security_context(DX_SECURITY_CONTEXT)
@@ -464,8 +465,8 @@ def archive_skip_function(dir, proj, archive_dict, temp_dict) -> None:
         log.info(f'SKIPPED {dir} in staging52')
     else:
         log.info(f'archiving staging52: {dir}')
-        # dx.api.project_archive(
-        #     proj, input_params={'folder': dir})
+        dx.api.project_archive(
+            proj, input_params={'folder': dir})
         archive_dict[f'archived_52'].append(dir)
         temp_dict['archived'].append(f'{proj}:{dir}')
 
@@ -647,7 +648,7 @@ def archiving_function(archive_pickle):
                 continue
             else:
                 log.info(f'archiving {id}')
-                # dx.api.project_archive(proj)
+                dx.api.project_archive(id)
                 archive_pickle['archived'].append(id)
                 temp_archived['archived'].append(id)
 
