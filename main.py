@@ -21,7 +21,7 @@ import collections
 import datetime as dt
 from dateutil.relativedelta import relativedelta
 from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.util.retry import Retry
+from urllib3.util import Retry
 
 # for sending helpdesk email
 import smtplib
@@ -79,8 +79,8 @@ def post_message_to_slack(channel, index, data, error='', alert=False) -> None:
         'proj_list',
         'staging52',
         'special_notify',
-        'never_archive',
         'no_archive',
+        'never_archive',
         'error'
         ]
 
@@ -100,7 +100,7 @@ def post_message_to_slack(channel, index, data, error='', alert=False) -> None:
             ),
         (
             f':warning: {today} *Inactive project or directory to be archived*'
-            '\n_unless re-tag `no-archive`_'
+            '\n_unless re-tag `no-archive` or `never-archive`_'
         ),
         (
             f':male-detective: {today} *Projects or directory'
@@ -108,7 +108,7 @@ def post_message_to_slack(channel, index, data, error='', alert=False) -> None:
             '\n_just for your information_'
         ),
         (
-            f':male-detective: {today} *Projects or directory'
+            f':female-detective: {today} *Projects or directory'
             ' tagged with `never-archive`:*'
             '\n_just for your information_'
         )
@@ -342,23 +342,13 @@ def remove_proj_tag(proj) -> str:
     return response['id']
 
 
-def get_all_old_enough_projs(month2, month3, archive_dict):
+def get_all_projs():
     """
-    Get all 002 and 003 projects which are not modified
-    in the last X months. Exclude projects: staging 52
-    as they will be processed separately + exclude projects
-    which had been archived.
+    Get all 002 and 003 projects
 
-    Input:
-        month: duration of inactivity in the last x month
-        archive_dict: the archive pickle to remember what file to be archived
-
-    Returns (dict):
-        dictionary of key (proj-id) and
-        value (describe JSON from dxpy for the proj)
-
+    Returns:
+        2 dict for 002 and 003 projs
     """
-
     # Get all 002 and 003 projects
     projects_dict_002 = dict()
     projects_dict_003 = dict()
@@ -381,15 +371,28 @@ def get_all_old_enough_projs(month2, month3, archive_dict):
     projects_dict_002.update({proj['id']: proj for proj in projects002})
     projects_dict_003.update({proj['id']: proj for proj in projects003})
 
-    # get proj tagged with no-archive or never-archive for notify later
-    agg_dict = {
-        **projects_dict_002, **projects_dict_003}
-    no_archive_list = [
-        proj['describe']['name'] for proj in agg_dict.values() if
-        'no-archive' in proj['describe']['tags']]
-    never_archive_list = [
-        proj['describe']['name'] for proj in agg_dict.values() if
-        'never-archive' in proj['describe']['tags']]
+    return projects_dict_002, projects_dict_003
+
+
+def get_all_old_enough_projs(month2, month3, archive_dict) -> dict:
+    """
+    Get all 002 and 003 projects which are not modified
+    in the last X months. Exclude projects: staging 52
+    as they will be processed separately + exclude projects
+    which had been archived.
+
+    Input:
+        month: duration of inactivity in the last x month
+        archive_dict: the archive pickle to remember what file to be archived
+
+    Returns (dict):
+        dictionary of key (proj-id) and
+        value (describe JSON from dxpy for the proj)
+
+    """
+
+    # Get all 002 and 003 projects
+    projects_dict_002, projects_dict_003 = get_all_projs()
 
     # sieve the dict to include only old-enough projs
     old_enough_projects_dict_002 = {
@@ -410,7 +413,7 @@ def get_all_old_enough_projs(month2, month3, archive_dict):
         if k not in excluded_list and k not in archive_dict['archived']
     }
 
-    return old_enough_projects_dict, no_archive_list, never_archive_list
+    return old_enough_projects_dict
 
 
 def get_all_dirs(archive_dict, proj_52) -> list:
@@ -447,7 +450,6 @@ def get_all_dirs(archive_dict, proj_52) -> list:
 
     # remove dirs which had been archived
     archived_dirs = archive_dict['archived_52']
-
     all_directories = [
         dir for dir in all_directories if dir[1] not in archived_dirs]
 
@@ -471,7 +473,6 @@ def archive_skip_function(dir, proj, archive_dict, temp_dict) -> None:
         archive_dict: the archive pickle for remembering skipped and
                         archived files
         temp_dict: temporary dictionary for slack notification later
-        num: 52
 
     Returns:
         None
@@ -484,7 +485,7 @@ def archive_skip_function(dir, proj, archive_dict, temp_dict) -> None:
         ))
 
     if never_archive:
-        log.info(f'NEVER_ARCHIVE {dir} in staging52')
+        log.info(f'NEVER_ARCHIVE: {dir} in staging52')
         return
 
     folders = list(dx.find_data_objects(
@@ -494,13 +495,81 @@ def archive_skip_function(dir, proj, archive_dict, temp_dict) -> None:
         ))
 
     if folders:
-        log.info(f'SKIPPED {dir} in staging52')
+        log.info(f'SKIPPED: {dir} in staging52')
     else:
         log.info(f'archiving staging52: {dir}')
-        # dx.api.project_archive(
-        #     proj, input_params={'folder': dir})
+        dx.api.project_archive(
+            proj, input_params={'folder': dir})
         archive_dict[f'archived_52'].append(dir)
         temp_dict['archived'].append(f'{proj}:{dir}')
+
+
+def get_tag_status(proj_52):
+    """
+    Function to get the latest tag status in staging52 and projects
+
+    Input:
+        proj_52: staging52 project-id
+        agg_dict: aggregated dict of 002 and 003 projects
+        to_be_archived: list of to-be-archived
+
+    Returns:
+        2 list
+    """
+
+    no_archive_list = []
+    never_archive_list = []
+
+    # check no-archive tag in staging52
+    temp_no_archive = list(
+        dx.find_data_objects(
+            project=proj_52, tag='no-archive', describe=True))
+    # check never-archive tag in staging52
+    temp_never_archive = list(
+        dx.find_data_objects(
+            project=proj_52, tag='never-archive', describe=True))
+
+    # get the directory name
+    temp_no_archive = [
+        t['describe']['folder'].lstrip('/') for t in temp_no_archive]
+    temp_never_archive = [
+        t['describe']['folder'].lstrip('/') for t in temp_never_archive]
+
+    # clean the directory path and append to list
+    for dir in temp_no_archive:
+        temp = dir.split('/')
+        if 'processed' in dir:
+            no_archive_list.append(f'/{temp[0]}/{temp[1]} in `staging52`')
+        else:
+            no_archive_list.append(f'{temp[0]} in `staging52`')
+
+    for dir in temp_never_archive:
+        temp = dir.split('/')
+        if 'processed' in dir:
+            never_archive_list.append(f'/{temp[0]}/{temp[1]} in `staging52`')
+        else:
+            never_archive_list.append(f'{temp[0]} in `staging52`')
+
+    # check no-archive & never-archive in projects
+
+    # Get all 002 and 003 projects
+    projects_dict_002, projects_dict_003 = get_all_projs()
+
+    # get proj tagged with no-archive or never-archive for notify later
+    agg_dict = {
+        **projects_dict_002, **projects_dict_003}
+
+    proj_no_archive = [
+        proj['describe']['name'] for proj in agg_dict.values() if
+        'no-archive' in proj['describe']['tags']]
+    proj_never_archive = [
+        proj['describe']['name'] for proj in agg_dict.values() if
+        'never-archive' in proj['describe']['tags']]
+
+    no_archive_list += proj_no_archive
+    never_archive_list += proj_never_archive
+
+    return no_archive_list, never_archive_list
 
 
 def find_projs_and_notify(archive_pickle):
@@ -522,7 +591,8 @@ def find_projs_and_notify(archive_pickle):
     to_be_archived_list = []
 
     # get all old enough projects
-    old_enough_projects_dict, no_archive_list, never_archive_list = get_all_old_enough_projs(MONTH2, MONTH3, archive_pickle)
+    old_enough_projects_dict = get_all_old_enough_projs(
+        MONTH2, MONTH3, archive_pickle)
 
     log.info(f'No. of old enough projects: {len(old_enough_projects_dict)}')
 
@@ -540,7 +610,7 @@ def find_projs_and_notify(archive_pickle):
 
     # get proj-id of each projs
     if old_enough_projects_dict:
-        log.info('Saving project-id to pickle')
+        log.info('Processing projects')
 
         for k, v in old_enough_projects_dict.items():
             tags = [tag.lower() for tag in v['describe']['tags']]
@@ -552,7 +622,6 @@ def find_projs_and_notify(archive_pickle):
 
             if 'never-archive' in tags:
                 log.info(f'NEVER_ARCHIVE: {k}')
-                never_archive_list.append(v['describe']['name'])
                 continue
             elif 'no-archive' in tags:
                 id = remove_proj_tag(k)
@@ -568,7 +637,7 @@ def find_projs_and_notify(archive_pickle):
 
     # sieve through each directory in staging52
     if old_enough_directories:
-        log.info('Saving directories to pickle')
+        log.info('Processing directories')
 
         for _, original_dir in old_enough_directories:
             # if there's 'never-archive' tag in any file, continue
@@ -580,7 +649,6 @@ def find_projs_and_notify(archive_pickle):
 
             if never_archive:
                 log.info(f'NEVER_ARCHIVE: {original_dir} in staging52')
-                never_archive_list.append(f'{original_dir} in `staging52`')
                 continue
 
             # check for 'no-archive' tag in any files
@@ -601,9 +669,8 @@ def find_projs_and_notify(archive_pickle):
                     [older_than(
                             MONTH2, f['describe']['modified']) for f in files]
                             ):
-
                     log.info(
-                        f'REMOVE_TAG: removing tag for {len(files)} files')
+                        f'REMOVE_TAG: removing tag for {len(files)} file(s)')
                     for file in files:
                         dx.api.file_remove_tags(
                             file['id'],
@@ -615,8 +682,9 @@ def find_projs_and_notify(archive_pickle):
                     archive_pickle[f'staging_52'].append(original_dir)
                 else:
                     log.info(f'SKIPPED: {original_dir} in staging52')
-                    no_archive_list.append(f'{original_dir} in `staging52`')
                     continue
+
+    no_archive_list, never_archive_list = get_tag_status(PROJECT_52)
 
     # get everything ready for slack notification
     proj_list = to_be_archived_list
@@ -661,7 +729,7 @@ def archiving_function(archive_pickle):
 
     """
 
-    log.info('Start archiving')
+    log.info('Start archiving function')
 
     dx_login()
 
@@ -679,10 +747,10 @@ def archiving_function(archive_pickle):
 
             # check if proj been tagged with 'no-archive'
             if 'never-archive' in proj_desc['tags']:
-                log.info(f'NEVER_ARCHIVE {proj_name}')
+                log.info(f'NEVER_ARCHIVE: {proj_name}')
                 continue
             elif 'no-archive' in proj_desc['tags']:
-                log.info(f'SKIPPED {proj_name}')
+                log.info(f'SKIPPED: {proj_name}')
                 continue
             else:
                 log.info(f'archiving {id}')
@@ -715,7 +783,7 @@ def archiving_function(archive_pickle):
     with open(ARCHIVE_PICKLE_PATH, 'wb') as f:
         pickle.dump(archive_pickle, f)
 
-    log.info('End of archiving')
+    log.info('End of archiving function')
 
     find_projs_and_notify(archive_pickle)
 
