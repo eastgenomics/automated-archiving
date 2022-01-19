@@ -229,11 +229,11 @@ def older_than(month, modified_epoch) -> bool:
 
 def check_dir(dir, month) -> bool:
     """
-    Function to check if project (002) for that directory
+    Function to check if project (002/003) for that directory
     exist. e.g. For 210407_A01295_0010_AHWL5GDRXX
-    it looks for 002_210407_A01295_0010_AHWL5GDRXX project
+    it will find 002_210407_A01295_0010_AHWL5GDRXX project
 
-    If the 002 exist, we check if the 002 has been inactive
+    If the 002/003 exist, we check if the proj has been inactive
     for the last X month. If yes, return True.
 
     Inputs:
@@ -385,7 +385,7 @@ def get_all_old_enough_projs(month2, month3, archive_dict) -> dict:
 
 def get_all_dirs(archive_dict, proj_52) -> list:
     """
-    Function to get all directories in staging52 and 53
+    Function to get all directories in staging52
     Exclude those which had been archived
     Combine both list and return
 
@@ -436,7 +436,7 @@ def archive_skip_function(dir, proj, archive_dict, temp_dict) -> None:
     If there is no tag in any files, directory will be archived.
 
     Input:
-        dir: directory in staging52/53
+        dir: directory in staging52
         proj: staging52
         archive_dict: the archive pickle for remembering skipped and
                         archived files
@@ -475,7 +475,7 @@ def archive_skip_function(dir, proj, archive_dict, temp_dict) -> None:
 
 def find_projs_and_notify(archive_pickle):
     """
-    Function to find projs or directories in staging52/53
+    Function to find projs or directories in staging52
     which has not been modified in the last X months (inactive)
     and send Slack notification about it.
     """
@@ -484,7 +484,7 @@ def find_projs_and_notify(archive_pickle):
 
     dx_login()
 
-    # special notify include those projs / directories in staging52/53
+    # special notify include those projs / directories in staging52
     # which has been tagged 'no-archive' before but has not been modified
     # for X months. It will be listed under its own column in Slack msg
     # to make it more visible
@@ -536,7 +536,7 @@ def find_projs_and_notify(archive_pickle):
                 archive_pickle['to_be_archived'].append(v['id'])
                 to_be_archived_list.append(v['describe']['name'])
 
-    # sieve through each directory in staging52/53
+    # sieve through each directory in staging52
     if old_enough_directories:
         log.info('Saving directories to pickle')
 
