@@ -15,7 +15,6 @@ import sys
 import requests
 import json
 import dxpy as dx
-from dotenv import load_dotenv
 import pickle
 import collections
 import datetime as dt
@@ -32,9 +31,6 @@ from email.utils import COMMASPACE, formatdate
 from helper import get_logger
 
 log = get_logger("main log")
-
-
-load_dotenv()
 
 SLACK_TOKEN = os.environ['SLACK_TOKEN']
 DNANEXUS_TOKEN = os.environ['DNANEXUS_TOKEN']
@@ -420,7 +416,6 @@ def get_all_dirs(archive_dict, proj_52) -> list:
     """
     Function to get all directories in staging52
     Exclude those which had been archived
-    Combine both list and return
 
     Inputs:
         archive_dict: archive pickle to get previously archived directories
@@ -497,7 +492,7 @@ def archive_skip_function(dir, proj, archive_dict, temp_dict) -> None:
     if folders:
         log.info(f'SKIPPED: {dir} in staging52')
     else:
-        log.info(f'archiving staging52: {dir}')
+        log.info(f'ARCHIVING staging52: {dir}')
         dx.api.project_archive(
             proj, input_params={'folder': dir})
         archive_dict[f'archived_52'].append(dir)
@@ -510,8 +505,6 @@ def get_tag_status(proj_52):
 
     Input:
         proj_52: staging52 project-id
-        agg_dict: aggregated dict of 002 and 003 projects
-        to_be_archived: list of to-be-archived
 
     Returns:
         2 list
@@ -551,7 +544,6 @@ def get_tag_status(proj_52):
             never_archive_list.append(f'{temp[0]} in `staging52`')
 
     # check no-archive & never-archive in projects
-
     # Get all 002 and 003 projects
     projects_dict_002, projects_dict_003 = get_all_projs()
 
@@ -753,8 +745,8 @@ def archiving_function(archive_pickle):
                 log.info(f'SKIPPED: {proj_name}')
                 continue
             else:
-                log.info(f'archiving {id}')
-                # dx.api.project_archive(id)
+                log.info(f'ARCHIVING {id}')
+                dx.api.project_archive(id)
                 archive_pickle['archived'].append(id)
                 temp_archived['archived'].append(id)
 
