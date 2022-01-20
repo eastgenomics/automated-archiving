@@ -10,7 +10,7 @@ Monthly check for archivable projects or directories on DNANexus & send Slack no
 The script generates a pickle file at location specified at `AUTOMATED_ARCHIVE_PICKLE_PATH`. This acts as the memory of the script to remember to-be-archived projects and files + all archived.
 
 ## Script Workflow
-When the script is executed, it checks if there's any 'to-be-archived' in its memory (to_be_archived, staging52). 
+When the script is executed, it checks if there's any files in its memory (to_be_archived, staging52). 
 ```
 archive_pickle = read_or_new_pickle(ARCHIVE_PICKLE_PATH)
 to_be_archived = archive_pickle['to_be_archived']
@@ -31,8 +31,8 @@ If there is nothing in the lists, it proceeds to find projects and directories w
 A config file (txt) with variables:
 - `DNANEXUS_TOKEN` : DNANexus API Token
 - `SLACK_TOKEN` : Slack Bot API Token
-- `PROJECT_52` : project-id
-- `PROJECT_53` : project-id
+- `PROJECT_52` : staging52 project-id
+- `PROJECT_53` : staging53 project-id
 - `AUTOMATED_MONTH_002` : Period of file being inactive after which to archive (months) for 002 projects & generally
 - `AUTOMATED_MONTH_003` : Period of file being inactive after which to archive (months) for 003 projects
 - `AUTOMATED_ARCHIVE_PICKLE_PATH` : pickle file directory
