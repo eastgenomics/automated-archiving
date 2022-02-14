@@ -10,20 +10,23 @@ Monthly check for archivable projects or directories on DNANexus & send Slack no
 The script generates a pickle file at location specified at `AUTOMATED_ARCHIVE_PICKLE_PATH`. This acts as the memory of the script to remember to-be-archived projects and files + all archived.
 
 ## Script Workflow
-When the script is executed, it checks if there's any files in its memory (to_be_archived, staging52). 
+When the script is executed, it checks if today is 1st or 15th of a month, if it is, it check for files in memory (to_be_archived, staging52). 
 ```
 archive_pickle = read_or_new_pickle(ARCHIVE_PICKLE_PATH)
 to_be_archived = archive_pickle['to_be_archived']
 staging52 = archive_pickle['staging_52']
 
-if to_be_archived or staging52:
-    archiving_function(archive_pickle)
-else:
-    find_projs_and_notify(archive_pickle)
+if today.day in [1, 15]:
+    if to_be_archived or staging52:
+        archiving_function(archive_pickle)
+    else:
+        find_projs_and_notify(archive_pickle)
 ```
 If there is, it runs the archiving function, skipping those tagged with either `no-archive` or `never-archive`. 
 
 If there is nothing in the lists, it proceeds to find projects and directories which have been inactive for the last X months.
+
+If today is not 1st or 15th, it check for the next run date and send a countdown to Slack
 
 ![script workflow](archive.png)
 
@@ -55,7 +58,7 @@ There are two tags recognized by the script:
 #### no-archive
 Projects tagged will temporarily bypass archiving. For directories in staging52, if one or more files within a directory (`/210202_A12905_003`) is tagged, the whole directory will temporarily bypass archiving. 
 
-The tag will be removed if a project or directory remain inactive for X months.
+The tag will be removed if a project or directory remain inactive for X months (`MONTH_002`)
 
 #### never-archive
 Projects tagged will bypass archiving indefintely, same goes to any directory within staging52.
@@ -76,4 +79,4 @@ Current tested command (local):
 ```docker run --env-file <config.txt> -v /var/log:/var/log <image name> ```
 
 ## Automation
-A cron job will be set up to run the script every two weeks
+A cron job will be set up to run the script on 1st and 15th of each month
