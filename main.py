@@ -48,7 +48,14 @@ SENDER = os.environ['ANSIBLE_SENDER']
 RECEIVERS = os.environ['ANSIBLE_RECEIVERS']
 
 
-def post_message_to_slack(channel, index, data, error='', alert=False) -> None:
+def post_message_to_slack(
+        channel,
+        index,
+        data,
+        error=None,
+        day=None,
+        alert=False
+        ) -> None:
     """
     Request function for slack web api for:
     (1) send alert msg when dxpy auth failed (alert=True)
@@ -59,6 +66,7 @@ def post_message_to_slack(channel, index, data, error='', alert=False) -> None:
         index: index for which proj in lists (below)
         data: list of projs / dirs to be archived
         error: (optional) (required only when dxpy auth failed) dxpy error msg
+        day: (optional) tuple of (day till next date, next run date)
         alert: (optional) (required only when dxpy auth failed) Boolean
 
     Return:
@@ -77,7 +85,9 @@ def post_message_to_slack(channel, index, data, error='', alert=False) -> None:
         'special_notify',
         'no_archive',
         'never_archive',
-        'error'
+        'archived',
+        'error',
+        'countdown',
         ]
 
     log.info(f'Posting data for: {lists[index]}')
@@ -107,6 +117,9 @@ def post_message_to_slack(channel, index, data, error='', alert=False) -> None:
             f':female-detective: {today} *Projects or directory'
             ' tagged with `never-archive`:*'
             '\n_just for your information_'
+        ),
+        (
+            ':closed_book: *Projects or directory archived:*'
         )
         ]
 
@@ -114,10 +127,19 @@ def post_message_to_slack(channel, index, data, error='', alert=False) -> None:
 
     try:
         if alert:
-            # only for dxpy auth failure alert msg
-            error_msg = (
-                "automated-archiving: Error with dxpy token! Error code: \n"
-                f"`{error.error_message()}`"
+            # alert=True
+            # either dxpy failed or countdown reminder
+            if error:
+                # only for dxpy auth failure alert msg
+                error_msg = (
+                    "automated-archiving: Error with dxpy token! Error code:\n"
+                    f"`{error.error_message()}`"
+                    )
+            else:
+                # only for countdown reminder
+                error_msg = (
+                    f':reminder_ribbon: automated-archiving: '
+                    f'{day[0]} day till archiving on {day[1]}'
                 )
 
             response = http.post(
@@ -128,7 +150,7 @@ def post_message_to_slack(channel, index, data, error='', alert=False) -> None:
                 }).json()
 
         else:
-            # default notification
+            # default notification for notify with slack attachment
             response = http.post(
                 'https://slack.com/api/chat.postMessage', {
                     'token': SLACK_TOKEN,
@@ -209,7 +231,7 @@ def read_or_new_pickle(path) -> dict:
     Using defaultdict() automatically create new dict.key()
 
     Input:
-        Path to store the pickle
+        Path to store the pickle (memory)
 
     Returns:
         dict: the stored pickle dict
@@ -300,11 +322,11 @@ def dx_login() -> None:
 
     except Exception as e:
         log.error('Error with DNANexus login')
-        log.error(f'Error message from DNANexus{e.error_message()}')
+        log.error(f'Error message from DNANexus: {e.error_message()}')
 
         post_message_to_slack(
             'egg-alerts',
-            5,
+            6,
             [],
             error=e,
             alert=True
@@ -458,13 +480,13 @@ def archive_skip_function(dir, proj, archive_dict, temp_dict) -> None:
     If there is 'never-archive', return
 
     If there is 'no-archive' tag in any file within the directory,
-    the dir will be skipped, folder is remembered in archive_pickle['skipped']
+    the dir will be skipped
 
     If there is no tag in any files, directory will be archived.
 
     Input:
         dir: directory in staging52
-        proj: staging52
+        proj: staging52 project id
         archive_dict: the archive pickle for remembering skipped and
                         archived files
         temp_dict: temporary dictionary for slack notification later
@@ -493,10 +515,11 @@ def archive_skip_function(dir, proj, archive_dict, temp_dict) -> None:
         log.info(f'SKIPPED: {dir} in staging52')
     else:
         log.info(f'ARCHIVING staging52: {dir}')
-        dx.api.project_archive(
+        res = dx.api.project_archive(
             proj, input_params={'folder': dir})
-        archive_dict[f'archived_52'].append(dir)
-        temp_dict['archived'].append(f'{proj}:{dir}')
+        if res['count'] != 0:
+            archive_dict['archived_52'].append(dir)
+            temp_dict['archived'].append(f'{proj}:{dir}')
 
 
 def get_tag_status(proj_52):
@@ -746,23 +769,35 @@ def archiving_function(archive_pickle):
                 continue
             else:
                 log.info(f'ARCHIVING {id}')
-                dx.api.project_archive(id)
-                archive_pickle['archived'].append(id)
-                temp_archived['archived'].append(id)
+                res = dx.api.project_archive(id)
+                # if res.count = 0, no files are being archived
+                # so we save output only on res.count != 0
+                if res['count'] != 0:
+                    archive_pickle['archived'].append(id)
+                    temp_archived['archived'].append(id)
 
     if list_of_dirs_52:
         for dir in list_of_dirs_52:
             archive_skip_function(
                 dir, PROJECT_52, archive_pickle, temp_archived)
 
-    # generate archiving log file
-    if os.path.isfile(ARCHIVED_TXT_PATH):
-        with open(ARCHIVED_TXT_PATH, 'a') as f:
-            for line in temp_archived['archived']:
-                f.write('\n' + line)
-    else:
-        with open(ARCHIVED_TXT_PATH, 'w') as f:
-            f.write('\n'.join(temp_archived['archived']))
+    # generate archiving txt file
+    # ONLY IF THERE IS FILEs BEING ARCHIVED
+    if temp_archived:
+        if os.path.isfile(ARCHIVED_TXT_PATH):
+            with open(ARCHIVED_TXT_PATH, 'a') as f:
+                for line in temp_archived['archived']:
+                    f.write('\n' + line)
+        else:
+            with open(ARCHIVED_TXT_PATH, 'w') as f:
+                f.write('\n'.join(temp_archived['archived']))
+
+        # also send a notification to say what have been archived
+        post_message_to_slack(
+            channel='egg-alerts',
+            index=5,
+            data=temp_archived['archived']
+            )
 
     # empty pickle
     log.info('Clearing pickle file')
@@ -780,16 +815,82 @@ def archiving_function(archive_pickle):
     find_projs_and_notify(archive_pickle)
 
 
+def get_next_archiving_date(today):
+    """
+    Function to get the next automated-archive run date
+
+    Input:
+        today (datetime)
+
+    Return:
+        If today.day is between 1-15: return 15
+        If today.day is after 15: return 1st day of next month
+
+    """
+
+    while today.day not in [1, 15]:
+        today += dt.timedelta(1)
+
+    return today
+
+
 def main():
 
     archive_pickle = read_or_new_pickle(ARCHIVE_PICKLE_PATH)
     to_be_archived = archive_pickle['to_be_archived']
     staging52 = archive_pickle['staging_52']
 
-    if to_be_archived or staging52:
-        archiving_function(archive_pickle)
+    today = dt.date.today()
+
+    if today.day in [1, 15]:
+        log.info('Today is archiving run date')
+
+        # if there is something in memory
+        # we run archive function
+        # else we find_and_notify
+        if to_be_archived or staging52:
+            archiving_function(archive_pickle)
+        else:
+            find_projs_and_notify(archive_pickle)
+
+    elif today.day > 1 and today.day < 15:
+        log.info('Today is within 1-15')
+
+        if to_be_archived or staging52:
+            # if there's to-be-archived in memory
+            # we do the countdown to egg-alerts
+            # else we just keep silence
+
+            next_archiving_date = get_next_archiving_date(today)
+            diff = next_archiving_date - today
+
+            post_message_to_slack(
+                'egg-alerts',
+                7,
+                [],
+                None,
+                (diff.days, next_archiving_date),
+                True)
+        else:
+            log.info('There is no data in memory')
+
     else:
-        find_projs_and_notify(archive_pickle)
+        print('Today is within 15-31')
+
+        if to_be_archived or staging52:
+
+            next_archiving_date = get_next_archiving_date(today)
+            diff = next_archiving_date - today
+
+            post_message_to_slack(
+                'egg-alerts',
+                7,
+                [],
+                None,
+                (diff.days, next_archiving_date),
+                True)
+        else:
+            log.info('There is no data in memory')
 
     log.info('End of script.')
 
