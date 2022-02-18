@@ -21,10 +21,7 @@ import datetime as dt
 from dateutil.relativedelta import relativedelta
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
-from members import MEMBER_LIST
-
-from dotenv import load_dotenv
-from datetime import timedelta
+from member.members import MEMBER_LIST
 
 # for sending helpdesk email
 import smtplib
@@ -35,7 +32,6 @@ from email.utils import COMMASPACE, formatdate
 from helper import get_logger
 
 log = get_logger("main log")
-load_dotenv()
 
 SLACK_TOKEN = os.environ['SLACK_TOKEN']
 DNANEXUS_TOKEN = os.environ['DNANEXUS_TOKEN']
@@ -540,6 +536,7 @@ def archive_skip_function(dir, proj, archive_dict, temp_dict) -> None:
 
     if folders:
         log.info(f'SKIPPED: {dir} in staging52')
+        return
     else:
         log.info(f'ARCHIVING staging52: {dir}')
         res = dx.api.project_archive(
@@ -618,12 +615,10 @@ def find_projs_and_notify(archive_pickle, today):
     """
     Function to find projs or directories in staging52
     which has not been modified in the last X months (inactive)
-    and send Slack notification about it.
+    and send Slack notification.
     """
 
     log.info('Start finding projs and notify')
-
-    dx_login()
 
     # special notify include those projs / directories in staging52
     # which has been tagged 'no-archive' before but has not been modified
@@ -824,11 +819,11 @@ def archiving_function(archive_pickle, today):
 
     log.info('Start archiving function')
 
-    dx_login()
-
     list_of_projs = archive_pickle['to_be_archived']
     list_of_dirs_52 = archive_pickle['staging_52']
 
+    # just for recording what has been archived
+    # plus for Slack notification
     temp_archived = collections.defaultdict(list)
 
     # do the archiving
@@ -872,10 +867,13 @@ def archiving_function(archive_pickle, today):
     if temp_archived:
         if os.path.isfile(ARCHIVED_TXT_PATH):
             with open(ARCHIVED_TXT_PATH, 'a') as f:
+                f.write(f'=== {today} ===')
+
                 for line in temp_archived['archived']:
                     f.write('\n' + line)
         else:
             with open(ARCHIVED_TXT_PATH, 'w') as f:
+                f.write(f'=== {today} ===')
                 f.write('\n'.join(temp_archived['archived']))
 
         # also send a notification to say what have been archived
@@ -927,11 +925,12 @@ def main():
     staging52 = archive_pickle['staging_52']
 
     today = dt.date.today()
-    today += timedelta(12)
 
     if today.day in [1, 15]:
         log.info(today)
         log.info('Today is archiving run date')
+
+        dx_login()
 
         # if there is something in memory
         # we run archive function
