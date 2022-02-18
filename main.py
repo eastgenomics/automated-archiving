@@ -19,9 +19,11 @@ import pickle
 import collections
 import datetime as dt
 from dateutil.relativedelta import relativedelta
+from datetime import timedelta
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 from member.members import MEMBER_LIST
+from dotenv import load_dotenv
 
 # for sending helpdesk email
 import smtplib
@@ -32,6 +34,7 @@ from email.utils import COMMASPACE, formatdate
 from helper import get_logger
 
 log = get_logger("main log")
+load_dotenv()
 
 SLACK_TOKEN = os.environ['SLACK_TOKEN']
 DNANEXUS_TOKEN = os.environ['DNANEXUS_TOKEN']
@@ -40,6 +43,8 @@ PROJECT_52 = os.environ['PROJECT_52']
 PROJECT_53 = os.environ['PROJECT_53']
 MONTH2 = int(os.environ['AUTOMATED_MONTH_002'])
 MONTH3 = int(os.environ['AUTOMATED_MONTH_003'])
+TAR_MONTH = int(os.environ['TAR_MONTH'])
+ARCHIVE_MODIFIED_MONTH = int(os.environ['ARCHIVE_MODIFIED_MONTH'])
 ARCHIVE_PICKLE_PATH = os.environ['AUTOMATED_ARCHIVE_PICKLE_PATH']
 ARCHIVED_TXT_PATH = os.environ['AUTOMATED_ARCHIVED_TXT_PATH']
 URL_PREFIX = 'https://platform.dnanexus.com/panx/projects'
@@ -50,13 +55,79 @@ SENDER = os.environ['ANSIBLE_SENDER']
 RECEIVERS = os.environ['ANSIBLE_RECEIVERS']
 
 
+def messages(purpose, today, day=None, error_msg=None):
+    messages = {
+        '002_proj':
+        (
+            f':bangbang: {today} *002 projects to be archived:*'
+            '\n_Please tag `no-archive` or `never-archive`_'
+            f'\n*Archive date: {day[0]}*'
+        ),
+        '003_proj':
+        (
+            f':bangbang: {today} *003 projects to be archived:*'
+            '\n_Please tag `no-archive` or `never-archive`_'
+            f'\n*Archive date: {day[0]}*'
+        ),
+        'staging_52':
+        (
+            f':bangbang: {today} *Directories in `staging52` to be archived:*'
+            '\n_Please tag `no-archive` or `never-archive`_'
+            f'\n*Archive date: {day[0]}*'
+        ),
+        'special_notify':
+        (
+            f':warning: {today} *Inactive project or directory to be archived*'
+            '\n_unless re-tag `no-archive` or `never-archive`_'
+            f'\n*Archive date: {day[0]}*'
+        ),
+        'no_archive':
+        (
+            f':male-detective: {today} *Projects or directory'
+            ' tagged with `no-archive`:*'
+            '\n_just for your information_'
+        ),
+        'never_archive':
+        (
+            f':female-detective: {today} *Projects or directory'
+            ' tagged with `never-archive`:*'
+            '\n_just for your information_'
+        ),
+        'archived':
+        (
+            ':closed_book: *Projects or directory archived:*'
+        ),
+        'countdown':
+        (
+            f':reminder_ribbon: automated-archiving: '
+            f'{day[0]} day till archiving on {day[1]}'
+        ),
+        'alert':
+        (
+            "automated-archiving: Error with dxpy token! Error code:\n"
+            f"`{error_msg}`"
+        ),
+        'tar_notify':
+        (
+            ':reminder_ribbon: automated-tar-notify: '
+            '`tar.gz` files not modified in the last 3 month'
+            f'\nEarliest Date: {day[0]} -- Latest Date: {day[1]}'
+            '\n_Please find complete list of file-id below:_'
+        )
+    }
+
+    if purpose not in messages.keys():
+        return None
+
+    return messages[purpose]
+
+
 def post_message_to_slack(
         channel,
-        index,
-        data,
+        purpose,
+        data=None,
         error=None,
-        day=None,
-        alert=False
+        day=None
         ) -> None:
     """
     Request function for slack web api for:
@@ -81,93 +152,51 @@ def post_message_to_slack(
 
     receivers = RECEIVERS.split(',') if ',' in RECEIVERS else [RECEIVERS]
 
-    lists = [
-        '002_proj',
-        '003_proj',
-        'staging52',
-        'special_notify',
-        'no_archive',
-        'never_archive',
-        'archived',
-        'error',
-        'countdown',
-        ]
-
-    log.info(f'Posting data for: {lists[index]}')
+    log.info(f'Posting data for: {purpose}')
 
     today = dt.date.today().strftime("%d/%m/%Y")
-    text_data = '\n'.join(data)
-
-    messages = [
-        (
-            f':bangbang: {today} *002 projects to be archived:*'
-            '\n_Please tag `no-archive` or `never-archive`_'
-            f'\n*Archive date: {day}*'
-        ),
-        (
-            f':bangbang: {today} *003 projects to be archived:*'
-            '\n_Please tag `no-archive` or `never-archive`_'
-            f'\n*Archive date: {day}*'
-        ),
-        (
-            f':bangbang: {today} *Directories in `staging52` to be archived:*'
-            '\n_Please tag `no-archive` or `never-archive`_'
-            f'\n*Archive date: {day}*'
-            ),
-        (
-            f':warning: {today} *Inactive project or directory to be archived*'
-            '\n_unless re-tag `no-archive` or `never-archive`_'
-            f'\n*Archive date: {day}*'
-        ),
-        (
-            f':male-detective: {today} *Projects or directory'
-            ' tagged with `no-archive`:*'
-            '\n_just for your information_'
-        ),
-        (
-            f':female-detective: {today} *Projects or directory'
-            ' tagged with `never-archive`:*'
-            '\n_just for your information_'
-        ),
-        (
-            ':closed_book: *Projects or directory archived:*'
-        )
-        ]
+    message = messages(purpose, today, day, error)
 
     log.info(f'Sending POST request to channel: #{channel}')
 
     try:
-        if alert:
-            # alert=True
-            # either dxpy failed or countdown reminder
-            if error:
-                # only for dxpy auth failure alert msg
-                error_msg = (
-                    "automated-archiving: Error with dxpy token! Error code:\n"
-                    f"`{error.error_message()}`"
-                    )
-            else:
-                # only for countdown reminder
-                error_msg = (
-                    f':reminder_ribbon: automated-archiving: '
-                    f'{day[0]} day till archiving on {day[1]}'
-                )
-
+        if purpose in ['alert', 'countdown']:
             response = http.post(
                 'https://slack.com/api/chat.postMessage', {
                     'token': SLACK_TOKEN,
-                    'channel': f'#{channel}',
-                    'text': error_msg
+                    'channel': f'U02HPRQ9X7Z',
+                    'text': message
                 }).json()
+        elif purpose == 'tar_notify':
 
+            with open('tar.txt', 'w') as f:
+                for line in data:
+                    f.write(f'{line}\n')
+
+            tar_file = {
+                'file': ('tar.txt', open('tar.txt', 'rb'), 'txt')
+                }
+            response = http.post(
+                'https://slack.com/api/files.upload',
+                params={
+                    'token': SLACK_TOKEN,
+                    'channels': f'#{channel}',
+                    'initial_comment': message,
+                    'filename': 'tar.txt',
+                    'filetype': 'txt'
+                },
+                files=tar_file
+                ).json()
         else:
-            # default notification for notify with slack attachment
+            # default notification
+            text_data = '\n'.join(data)
+
             response = http.post(
                 'https://slack.com/api/chat.postMessage', {
                     'token': SLACK_TOKEN,
                     'channel': f'#{channel}',
                     'attachments': json.dumps([{
-                        "pretext": messages[index],
+                        "pretext": message,
                         "text": text_data}])
                 }).json()
 
@@ -331,16 +360,15 @@ def dx_login() -> None:
         dx.api.system_whoami()
         log.info('DNANexus login successful')
 
-    except Exception as e:
+    except Exception as err:
+        error_msg = err.error_message()
         log.error('Error with DNANexus login')
-        log.error(f'Error message from DNANexus: {e.error_message()}')
+        log.error(f'Error message from DNANexus: {error_msg}')
 
         post_message_to_slack(
             'egg-alerts',
-            7,
-            [],
-            error=e,
-            alert=True
+            'alert',
+            error=error_msg,
             )
 
         log.info('End of script')
@@ -518,10 +546,14 @@ def archive_skip_function(dir, proj, archive_dict, temp_dict) -> None:
         log.info(f'NEVER_ARCHIVE: {dir} in staging52')
         return
 
+    # 2 * 4 week = 8 weeks
+    num_weeks = ARCHIVE_MODIFIED_MONTH * 4
+
+    # check if there's any files modified in the last num_weeks
     recent_modified = list(dx.find_data_objects(
         project=proj,
         folder=dir,
-        modified_after='-12w'
+        modified_after=f'-{num_weeks}w'
     ))
 
     if recent_modified:
@@ -775,24 +807,25 @@ def find_projs_and_notify(archive_pickle, today):
                     proj003.append(f'Can\'t find ID for: {current_usr}')
             proj003.append(link['link'])
 
-    lists = [
-          proj002,
-          proj003,
-          folders52,
-          special_notify_list,
-          no_archive_list,
-          never_archive_list
+    big_list = [
+          ('002_proj', proj002),
+          ('003_proj', proj003),
+          ('staging_52', folders52),
+          ('special_nofify', special_notify_list),
+          ('no_archive', no_archive_list),
+          ('never_archive', never_archive_list)
         ]
 
     # send slack notification if there's old-enough dir / projs
     next_archiving_date = get_next_archiving_date(today)
-    for index, data in enumerate(lists):
+
+    for purpose, data in big_list:
         if data:
             post_message_to_slack(
-                channel='egg-alerts',
-                index=index,
+                'egg-alerts',
+                purpose,
                 data=data,
-                day=next_archiving_date
+                day=(next_archiving_date, None)
                 )
         else:
             continue
@@ -842,7 +875,7 @@ def archiving_function(archive_pickle, today):
                 log.info(f'SKIPPED: {proj_name}')
                 continue
             else:
-                if older_than(MONTH3, modified_epoch):
+                if older_than(ARCHIVE_MODIFIED_MONTH, modified_epoch):
                     # True if not modified in the last 3 month
 
                     log.info(f'ARCHIVING {id}')
@@ -878,8 +911,8 @@ def archiving_function(archive_pickle, today):
 
         # also send a notification to say what have been archived
         post_message_to_slack(
-            channel='egg-alerts',
-            index=6,
+            'egg-alerts',
+            'archived',
             data=temp_archived['archived']
             )
 
@@ -918,6 +951,62 @@ def get_next_archiving_date(today):
     return today
 
 
+def make_datetime_format(modified_epoch):
+    """
+    Function to turn modified epoch (returned by DNANexus)
+    into readable datetime format
+
+    Return:
+        datetime
+
+    """
+
+    modified = modified_epoch / 1000.0
+    modified_dt = dt.datetime.fromtimestamp(modified)
+
+    return modified_dt
+
+
+def get_old_tar_and_notify():
+    """
+    Function to get tar which are not modified in the last 3 months
+    Regex Format:
+        only returns "run.....tar.gz" in staging52
+
+    Return:
+        list of tar files not modified in the last 3 months
+        min_date: earliest date among the list of tars
+        max_date: latest date among the list of tars
+
+    """
+    log.info('Getting old tar.gz in staging52')
+
+    result = list(
+        dx.find_data_objects(
+            name='^run.*.tar.gz',
+            name_mode='regexp',
+            describe=True,
+            project=PROJECT_52))
+
+    filtered_result = [
+        x for x in result if older_than(TAR_MONTH, x['describe']['modified'])]
+
+    id_results = [x['id'] for x in filtered_result]
+
+    dates = [make_datetime_format(
+        d['describe']['modified']) for d in filtered_result]
+
+    min_date = min(dates).strftime('%Y-%m-%d')
+    max_date = max(dates).strftime('%Y-%m-%d')
+
+    post_message_to_slack(
+        'egg-alerts',
+        'tar_notify',
+        data=id_results,
+        day=(min_date, max_date)
+    )
+
+
 def main():
 
     archive_pickle = read_or_new_pickle(ARCHIVE_PICKLE_PATH)
@@ -925,12 +1014,16 @@ def main():
     staging52 = archive_pickle['staging_52']
 
     today = dt.date.today()
+    today += timedelta(11)
 
     if today.day in [1, 15]:
         log.info(today)
         log.info('Today is archiving run date')
 
         dx_login()
+
+        if today.day == 1:
+            get_old_tar_and_notify()
 
         # if there is something in memory
         # we run archive function
@@ -954,11 +1047,9 @@ def main():
 
             post_message_to_slack(
                 'egg-alerts',
-                8,
-                [],
-                None,
-                (diff.days, next_archiving_date),
-                True)
+                'countdown',
+                day=(diff.days, next_archiving_date),
+                )
         else:
             log.info('There is no data in memory')
 
@@ -973,11 +1064,9 @@ def main():
 
             post_message_to_slack(
                 'egg-alerts',
-                8,
-                [],
-                None,
-                (diff.days, next_archiving_date),
-                True)
+                'countdown',
+                day=(diff.days, next_archiving_date),
+                )
         else:
             log.info('There is no data in memory')
 
