@@ -28,7 +28,10 @@ If there is nothing in the lists, it proceeds to find projects and directories w
 
 If today is not 1st or 15th, it check for the next run date and send a countdown to Slack
 
-![script workflow](archive.png)
+![script workflow](demo/archive.png)
+
+## Example Slack Notification
+![notification](demo/demo_notification.png)
 
 ## Configs required
 A config file (txt) with variables:
