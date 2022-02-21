@@ -11,24 +11,29 @@ The script generates a pickle file at location specified at `AUTOMATED_ARCHIVE_P
 
 ## Script Workflow
 When the script is executed, it checks if today is 1st or 15th of a month, if it is, it check for files in memory (to_be_archived, staging52). 
+
+If `today.day == 1`: It checks for old enough `tar.gz` in staging52 
 ```
 archive_pickle = read_or_new_pickle(ARCHIVE_PICKLE_PATH)
 to_be_archived = archive_pickle['to_be_archived']
 staging52 = archive_pickle['staging_52']
 
 if today.day in [1, 15]:
+    if today.day == 1:
+                get_old_tar_and_notify()
+    
     if to_be_archived or staging52:
         archiving_function(archive_pickle)
     else:
         find_projs_and_notify(archive_pickle)
 ```
-If there is, it runs the archiving function, skipping those tagged with either `no-archive` or `never-archive`. 
+If there is, it runs the archiving function, skipping those tagged with either `no-archive` or `never-archive` or those modified in the last `TAR_MONTH` months
 
-If there is nothing in the lists, it proceeds to find projects and directories which have been inactive for the last X months.
+If there is nothing in the memory, it proceeds to find projects and directories which have been inactive for the last X months (find_projs_and_notify)
 
-If today is not 1st or 15th, it check for the next run date and send a countdown to Slack
+If today is not 1st or 15th, it check for the next run date and send a countdown to Slack (`egg-alerts`)
 
-![script workflow](demo/archive.png)
+![script workflow](demo/script_workflow.png)
 
 ## Example Slack Notification
 ![notification](demo/demo_notification.png)
@@ -47,6 +52,8 @@ A config file (txt) with variables:
 - `ANSIBLE_PORT`: (for sending helpdesk email) server port
 - `SENDER`: (for sending helpdesk email) BioinformaticsTeamGeneticsLab@addenbrookes.nhs.uk
 - `RECEIVERS`: (for sending helpdesk email) emails separated by comma (e.g. abc.domain,bbc.domain)
+- `TAR_MONTH`: Period of tar.gz being inactive to be considered 'old enough' (only used by `get_old_tar_and_notify` function)
+- `ARCHIVE_MODIFIED_MONTH`: During archiving_function, if file if modified in the last `ARCHIVE_MODIFIED_MONTH` month, we skip archiving it
 
 ## Logging
 The main logging script is `helper.py`
