@@ -33,7 +33,7 @@ If there is nothing in the memory, it proceeds to find projects and directories 
 
 If today is not 1st or 15th, it check for the next run date and send a countdown to Slack (`egg-alerts`)
 
-![script workflow](demo/script_workflow.png)
+![script workflow](demo/script_workflow_updated.png)
 
 ## Example Slack Notification
 ![notification](demo/demo_notification.png)
