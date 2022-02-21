@@ -56,6 +56,19 @@ RECEIVERS = os.environ['ANSIBLE_RECEIVERS']
 
 
 def messages(purpose, today, day=None, error_msg=None):
+    """
+    Function to return the right message for the give purpose
+
+    Inputs:
+        purpose: decide on which message to return (etc, 002_proj, alert..)
+        today: today's date to display on Slack message
+        day: tuple of dates (vary) depending on purpose
+        error_msg: error message from if purpose == alert (dxpy fail)
+
+    Return:
+        string of message
+    """
+
     messages = {
         '002_proj':
         (
@@ -99,7 +112,7 @@ def messages(purpose, today, day=None, error_msg=None):
         ),
         'countdown':
         (
-            f':reminder_ribbon: automated-archiving: '
+            f'automated-archiving: '
             f'{day[0]} day till archiving on {day[1]}'
         ),
         'alert':
@@ -109,13 +122,14 @@ def messages(purpose, today, day=None, error_msg=None):
         ),
         'tar_notify':
         (
-            ':reminder_ribbon: automated-tar-notify: '
+            'automated-tar-notify: '
             '`tar.gz` files not modified in the last 3 month'
             f'\nEarliest Date: {day[0]} -- Latest Date: {day[1]}'
             '\n_Please find complete list of file-id below:_'
         )
     }
 
+    # just in case
     if purpose not in messages.keys():
         return None
 
@@ -127,7 +141,7 @@ def post_message_to_slack(
         purpose,
         data=None,
         error=None,
-        day=None
+        day=(None, None)
         ) -> None:
     """
     Request function for slack web api for:
@@ -136,11 +150,11 @@ def post_message_to_slack(
 
     Inputs:
         channel: e.g. egg-alerts, egg-logs
-        index: index for which proj in lists (below)
+        purpose: this decide what message to send
         data: list of projs / dirs to be archived
         error: (optional) (required only when dxpy auth failed) dxpy error msg
-        day: (optional) tuple of (day till next date, next run date)
-        alert: (optional) (required only when dxpy auth failed) Boolean
+        day: (optional) tuple of (day till next date, next run date) depend
+        on purpose
 
     Return:
         None
@@ -164,7 +178,7 @@ def post_message_to_slack(
             response = http.post(
                 'https://slack.com/api/chat.postMessage', {
                     'token': SLACK_TOKEN,
-                    'channel': f'U02HPRQ9X7Z',
+                    'channel': f'#{channel}',
                     'text': message
                 }).json()
         elif purpose == 'tar_notify':
@@ -342,7 +356,8 @@ def check_dir(dir, month) -> bool:
 
 def dx_login() -> None:
     """
-    DNANexus login check function
+    DNANexus login check function.
+    If fail, send Slack notification
 
     Returns:
         None
@@ -439,7 +454,8 @@ def get_all_old_enough_projs(month2, month3, archive_dict) -> dict:
     which had been archived.
 
     Input:
-        month: duration of inactivity in the last x month
+        month2: duration of inactivity in the last x month for 002
+        month3: duration of inactivity in the last x month for 003
         archive_dict: the archive pickle to remember what file to be archived
 
     Returns (dict):
@@ -586,7 +602,8 @@ def get_tag_status(proj_52):
         proj_52: staging52 project-id
 
     Returns:
-        2 list
+        2 list of proj & directories in staging52 tagged with either
+        no-archive and never-archive
     """
 
     no_archive_list = []
@@ -648,6 +665,14 @@ def find_projs_and_notify(archive_pickle, today):
     Function to find projs or directories in staging52
     which has not been modified in the last X months (inactive)
     and send Slack notification.
+
+    Inputs:
+        archive_pickle: to remember to-be-archived files
+        today: today's date to get next_archiving date + include
+        in Slack notification
+
+    Return:
+        None
     """
 
     log.info('Start finding projs and notify')
@@ -821,6 +846,8 @@ def find_projs_and_notify(archive_pickle, today):
 
     for purpose, data in big_list:
         if data:
+            data.append('END OF MESSAGE')
+
             post_message_to_slack(
                 'egg-alerts',
                 purpose,
@@ -841,12 +868,14 @@ def find_projs_and_notify(archive_pickle, today):
 
 def archiving_function(archive_pickle, today):
     """
-    Function to check previously listed projs and dirs
-    which have not been modified (inactive) in the last X months
+    Function to check previously listed projs and dirs (memory)
     and do the archiving.
 
-    Skip projs tagged 'no-archive' or any directory with one file within
+    Skip projs if:
+    1. tagged 'no-archive' or any directory with one file within
     tagged with 'no-archive'
+    2. modified in the past TAR_MONTH month
+    3. tagged 'never-archive'
 
     """
 
@@ -886,7 +915,6 @@ def archiving_function(archive_pickle, today):
                         archive_pickle['archived'].append(id)
                         temp_archived['archived'].append(id)
                 else:
-                    # Skip the project
                     log.info(f'RECENTLY MODIFIED & SKIPPED: {proj_name}')
                     continue
 
@@ -1014,7 +1042,6 @@ def main():
     staging52 = archive_pickle['staging_52']
 
     today = dt.date.today()
-    today += timedelta(11)
 
     if today.day in [1, 15]:
         log.info(today)
