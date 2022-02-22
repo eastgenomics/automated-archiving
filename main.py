@@ -185,7 +185,8 @@ def post_message_to_slack(
 
             with open('tar.txt', 'w') as f:
                 for line in data:
-                    f.write(f'{line}\n')
+                    txt = ' '.join(line)
+                    f.write(f'{txt}\n')
 
             tar_file = {
                 'file': ('tar.txt', open('tar.txt', 'rb'), 'txt')
@@ -846,7 +847,7 @@ def find_projs_and_notify(archive_pickle, today):
 
     for purpose, data in big_list:
         if data:
-            data.append('END OF MESSAGE')
+            data.append('-- END OF MESSAGE --')
 
             post_message_to_slack(
                 'egg-alerts',
@@ -1019,7 +1020,7 @@ def get_old_tar_and_notify():
     filtered_result = [
         x for x in result if older_than(TAR_MONTH, x['describe']['modified'])]
 
-    id_results = [x['id'] for x in filtered_result]
+    id_results = [(x['id'], x['describe']['folder']) for x in filtered_result]
 
     dates = [make_datetime_format(
         d['describe']['modified']) for d in filtered_result]
