@@ -781,13 +781,18 @@ def find_projs_and_notify(archive_pickle, today):
             STAGING_PREFIX = f'{URL_PREFIX}/{trimmed_proj}/data'
 
             if not files:
+                # if there's no 'no-archive' tag or 'never-archive' tag
                 archive_pickle[f'staging_52'].append(original_dir)
                 to_be_archived_dir.append(
                     f'<{STAGING_PREFIX}/{trimmed_dir}|{original_dir}>')
             else:
+                # if there's 'no-archive' tag
                 # check if files are active in the last X month
-                # if no, remove tag and list for special notify
-                # if yes, continue
+                # when tagged, modified date will change
+                # if modified date > x month, we know the tag was
+                # probably there for quite a while
+                # if all tagged files have modified date > x month
+                # we remove tags and put in special list, else skip
                 if all(
                     [older_than(
                             MONTH2, f['describe']['modified']) for f in files]
