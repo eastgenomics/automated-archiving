@@ -55,7 +55,7 @@ SENDER = os.environ['ANSIBLE_SENDER']
 RECEIVERS = os.environ['ANSIBLE_RECEIVERS']
 
 
-def messages(purpose, today, day=None, error_msg=None) -> str:
+def messages(purpose, today, day, error_msg) -> str:
     """
     Function to return the right message for the give purpose
 
@@ -69,7 +69,7 @@ def messages(purpose, today, day=None, error_msg=None) -> str:
         string of message
     """
 
-    messages = {
+    msgs = {
         '002_proj':
         (
             f':bangbang: {today} *002 projects to be archived:*'
@@ -129,7 +129,7 @@ def messages(purpose, today, day=None, error_msg=None) -> str:
         )
     }
 
-    return messages[purpose]
+    return msgs[purpose]
 
 
 def post_message_to_slack(
