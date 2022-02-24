@@ -12,6 +12,7 @@ noted to-be-archive files. It skips files tagged with 'no-archive'
 
 import os
 import sys
+from xmlrpc.client import DateTime
 import requests
 import json
 import dxpy as dx
@@ -23,7 +24,7 @@ from datetime import timedelta
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 from member.members import MEMBER_LIST
-from dotenv import load_dotenv
+from typing import Union
 
 # for sending helpdesk email
 import smtplib
@@ -34,7 +35,6 @@ from email.utils import COMMASPACE, formatdate
 from helper import get_logger
 
 log = get_logger("main log")
-load_dotenv()
 
 SLACK_TOKEN = os.environ['SLACK_TOKEN']
 DNANEXUS_TOKEN = os.environ['DNANEXUS_TOKEN']
@@ -55,7 +55,7 @@ SENDER = os.environ['ANSIBLE_SENDER']
 RECEIVERS = os.environ['ANSIBLE_RECEIVERS']
 
 
-def messages(purpose, today, day=None, error_msg=None):
+def messages(purpose, today, day=None, error_msg=None) -> str:
     """
     Function to return the right message for the give purpose
 
@@ -129,10 +129,6 @@ def messages(purpose, today, day=None, error_msg=None):
         )
     }
 
-    # just in case
-    if purpose not in messages.keys():
-        return None
-
     return messages[purpose]
 
 
@@ -183,6 +179,10 @@ def post_message_to_slack(
                 }).json()
         elif purpose == 'tar_notify':
 
+            # tar_notify requires making a txt file of file-id
+            # then send file as attachment using an enctype
+            # of multipart/form-data
+
             with open('tar.txt', 'w') as f:
                 for line in data:
                     txt = ' '.join(line)
@@ -203,7 +203,8 @@ def post_message_to_slack(
                 files=tar_file
                 ).json()
         else:
-            # default notification
+            # default notification which is an attachment rather than
+            # text (as seen in alert / countdown above)
             text_data = '\n'.join(data)
 
             response = http.post(
@@ -415,7 +416,7 @@ def remove_proj_tag(proj) -> None:
         proj, input_params={'tags': ['no-archive']})
 
 
-def get_all_projs():
+def get_all_projs() -> Union[dict, dict]:
     """
     Get all 002 and 003 projects
 
@@ -480,11 +481,13 @@ def get_all_old_enough_projs(month2, month3, archive_dict) -> dict:
         **old_enough_projects_dict_002, **old_enough_projects_dict_003}
 
     excluded_list = [PROJECT_52, PROJECT_53]
+    # get all recognized as archived to exclude
+    archived_list = archive_dict['archived'] + archive_dict['already_archived']
 
     # exclude projs (staging52/53) and archived projs
     old_enough_projects_dict = {
         k: v for k, v in old_enough_projects_dict.items()
-        if k not in excluded_list and k not in archive_dict['archived']
+        if k not in excluded_list and k not in archived_list
     }
 
     return old_enough_projects_dict
@@ -522,7 +525,9 @@ def get_all_dirs(archive_dict, proj_52) -> list:
     all_directories = directories_in_52 + directories_in_52_processed
 
     # remove dirs which had been archived
-    archived_dirs = archive_dict['archived_52']
+    archived_dirs = archive_dict['archived_52'] \
+        + archive_dict['already_archived_52']
+
     all_directories = [
         dir for dir in all_directories if dir[1] not in archived_dirs]
 
@@ -593,9 +598,11 @@ def archive_skip_function(dir, proj, archive_dict, temp_dict) -> None:
         if res['count'] != 0:
             archive_dict['archived_52'].append(dir)
             temp_dict['archived'].append(f'{proj}:{dir}')
+        else:
+            archive_dict['already_archived_52'].append(dir)
 
 
-def get_tag_status(proj_52):
+def get_tag_status(proj_52) -> Union[list, list]:
     """
     Function to get the latest tag status in staging52 and projects
 
@@ -661,7 +668,7 @@ def get_tag_status(proj_52):
     return no_archive_list, never_archive_list
 
 
-def find_projs_and_notify(archive_pickle, today):
+def find_projs_and_notify(archive_pickle, today) -> None:
     """
     Function to find projs or directories in staging52
     which has not been modified in the last X months (inactive)
@@ -842,7 +849,7 @@ def find_projs_and_notify(archive_pickle, today):
           ('002_proj', proj002),
           ('003_proj', proj003),
           ('staging_52', folders52),
-          ('special_nofify', special_notify_list),
+          ('special_notify', special_notify_list),
           ('no_archive', no_archive_list),
           ('never_archive', never_archive_list)
         ]
@@ -872,7 +879,7 @@ def find_projs_and_notify(archive_pickle, today):
     log.info('End of finding projs and notify')
 
 
-def archiving_function(archive_pickle, today):
+def archiving_function(archive_pickle, today) -> None:
     """
     Function to check previously listed projs and dirs (memory)
     and do the archiving.
@@ -911,15 +918,23 @@ def archiving_function(archive_pickle, today):
                 continue
             else:
                 if older_than(ARCHIVE_MODIFIED_MONTH, modified_epoch):
-                    # True if not modified in the last 3 month
+                    # True if not modified in the last
+                    # ARCHIVE_MODIFIED_MONTH month
 
                     log.info(f'ARCHIVING {id}')
                     res = dx.api.project_archive(id)
                     # if res.count = 0, no files are being archived
-                    # so we save output only on res.count != 0
+                    # which might mean all files are already archived
+                    # before this script runs on it. So we save it
+                    # into memory (already_archived)
+                    # we recognize archived only on res.count != 0
+                    # meaning the script did archive something
+                    # in the project
                     if res['count'] != 0:
                         archive_pickle['archived'].append(id)
                         temp_archived['archived'].append(id)
+                    else:
+                        archive_pickle['already_archived'].append(id)
                 else:
                     log.info(f'RECENTLY MODIFIED & SKIPPED: {proj_name}')
                     continue
@@ -966,15 +981,15 @@ def archiving_function(archive_pickle, today):
     find_projs_and_notify(archive_pickle, today)
 
 
-def get_next_archiving_date(today):
+def get_next_archiving_date(today) -> DateTime:
     """
     Function to get the next automated-archive run date
 
     Input:
         today (datetime)
 
-    Return:
-        If today.day is between 1-15: return 15
+    Return (datetime):
+        If today.day is between 1-15: return 15th of this month
         If today.day is after 15: return 1st day of next month
 
     """
@@ -985,7 +1000,7 @@ def get_next_archiving_date(today):
     return today
 
 
-def make_datetime_format(modified_epoch):
+def make_datetime_format(modified_epoch) -> DateTime:
     """
     Function to turn modified epoch (returned by DNANexus)
     into readable datetime format
@@ -1001,16 +1016,14 @@ def make_datetime_format(modified_epoch):
     return modified_dt
 
 
-def get_old_tar_and_notify():
+def get_old_tar_and_notify() -> None:
     """
     Function to get tar which are not modified in the last 3 months
     Regex Format:
         only returns "run.....tar.gz" in staging52
 
     Return:
-        list of tar files not modified in the last 3 months
-        min_date: earliest date among the list of tars
-        max_date: latest date among the list of tars
+        None
 
     """
     log.info('Getting old tar.gz in staging52')
@@ -1022,6 +1035,7 @@ def get_old_tar_and_notify():
             describe=True,
             project=PROJECT_52))
 
+    # list of tar files not modified in the last 3 months
     filtered_result = [
         x for x in result if older_than(TAR_MONTH, x['describe']['modified'])]
 
@@ -1030,7 +1044,9 @@ def get_old_tar_and_notify():
     dates = [make_datetime_format(
         d['describe']['modified']) for d in filtered_result]
 
+    # earliest date among the list of tars
     min_date = min(dates).strftime('%Y-%m-%d')
+    # latest date among the list of tars
     max_date = max(dates).strftime('%Y-%m-%d')
 
     post_message_to_slack(
@@ -1066,7 +1082,7 @@ def main():
         else:
             find_projs_and_notify(archive_pickle, today)
 
-    elif today.day > 1 and today.day < 15:
+    elif today.day < 15:
         log.info(today)
         log.info('Today is within 1-15')
 
