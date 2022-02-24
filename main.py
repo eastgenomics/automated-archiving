@@ -1005,6 +1005,9 @@ def make_datetime_format(modified_epoch) -> DateTime:
     Function to turn modified epoch (returned by DNANexus)
     into readable datetime format
 
+    Input:
+        epoch modified datetime from dnanexus describe
+
     Return:
         datetime
 
