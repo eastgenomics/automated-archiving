@@ -490,6 +490,17 @@ def get_all_old_enough_projs(month2, month3, archive_dict) -> dict:
         if k not in excluded_list and k not in archived_list
     }
 
+    # get proj tagged archive
+    tagged_archive_proj = list(dx.search.find_projects(
+        name='^00[2,3].*',
+        name_mode='regexp',
+        tags=['archive'],
+        describe=True
+    ))
+
+    old_enough_projects_dict.update(
+        {proj['id']: proj for proj in tagged_archive_proj})
+
     return old_enough_projects_dict
 
 
@@ -717,15 +728,14 @@ def find_projs_and_notify(archive_pickle, today) -> None:
 
         for k, v in old_enough_projects_dict.items():
             tags = [tag.lower() for tag in v['describe']['tags']]
+            proj_name = v['describe']['name']
+            trimmed_id = k.lstrip('project-')
+            created_by = v['describe']['createdBy']['user']
 
             # if 'never-archive', move on
             # if 'no-archive', remove and put it in
             # to-be-archived list & special notify
             # for Slack notification
-
-            proj_name = v['describe']['name']
-            trimmed_id = k.lstrip('project-')
-            created_by = v['describe']['createdBy']['user']
 
             if 'never-archive' in tags:
                 log.info(f'NEVER_ARCHIVE: {k}')
@@ -744,8 +754,8 @@ def find_projs_and_notify(archive_pickle, today) -> None:
                         'user': created_by,
                         'link': f'<{URL_PREFIX}/{trimmed_id}/|{proj_name}>'
                     })
-
             else:
+                # all tagged 'archive' + the rest will end up here
                 archive_pickle['to_be_archived'].append(k)
                 if proj_name.startswith('002'):
                     to_be_archived_list['002'].append(
@@ -909,13 +919,22 @@ def archiving_function(archive_pickle, today) -> None:
             proj_name = proj_desc['name']
             modified_epoch = proj_desc['modified']
 
-            # check if proj been tagged with 'no-archive'
             if 'never-archive' in proj_desc['tags']:
                 log.info(f'NEVER_ARCHIVE: {proj_name}')
                 continue
             elif 'no-archive' in proj_desc['tags']:
                 log.info(f'SKIPPED: {proj_name}')
                 continue
+            elif 'archive' in proj_desc['tags']:
+                # if archive tag in proj
+                # we do archiving
+                log.info(f'ARCHIVING {id}')
+                res = dx.api.project_archive(id)
+                if res['count'] != 0:
+                    archive_pickle['archived'].append(id)
+                    temp_archived['archived'].append(id)
+                else:
+                    archive_pickle['already_archived'].append(id)
             else:
                 if older_than(ARCHIVE_MODIFIED_MONTH, modified_epoch):
                     # True if not modified in the last
@@ -936,6 +955,9 @@ def archiving_function(archive_pickle, today) -> None:
                     else:
                         archive_pickle['already_archived'].append(id)
                 else:
+                    # end up here if proj is not older than
+                    # ARCHIVE_MODIFIED_MONTH, meaning
+                    # proj has been modified recently, so we skip
                     log.info(f'RECENTLY MODIFIED & SKIPPED: {proj_name}')
                     continue
 
