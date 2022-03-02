@@ -81,7 +81,7 @@ The tag will be removed if remain inactive for X months (`MONTH_002`)
 #### never-archive
 Projects tagged will bypass archiving indefintely, same goes to any directory within staging52.
 
-### archive
+#### archive
 Tagged project or directory will be listed for archiving, regardless of modified date
 
 
