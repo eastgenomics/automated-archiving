@@ -31,8 +31,13 @@ if today.day in [1, 15]:
 
 ![script workflow](demo/script_workflow_updated.png)
 
-## Example Slack Notification
-![notification](demo/demo_notification.png)
+## Example Notification
+
+#### 003 Slack Notification
+![notification](demo/003_demo.png)
+
+#### tar.gz Slack Notification
+![tar notification](demo/tar_files.png)
 
 ## Configs required
 A config file (txt) with variables:
