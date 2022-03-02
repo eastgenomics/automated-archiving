@@ -11,9 +11,13 @@ The script generates a pickle file at location specified at `AUTOMATED_ARCHIVE_P
 
 ## Script Workflow
 When the script is executed, it checks if today is 1st or 15th of the month, if it is, it check for files in memory (to_be_archived, staging52). 
+
 If `today.day == 1`: It checks for old enough `tar.gz` in staging52 and send Slack notification
+
 If there is 'to-be-archived' in memory, it runs the archiving function
+
 If there is nothing in the memory, it proceeds to find 'archivable' projects (find_projs_and_notify) and send Slack notification
+
 If today is not 1st or 15th, it checks for the next run date and send a message to Slack (`egg-alerts`)
 ```
 archive_pickle = read_or_new_pickle(ARCHIVE_PICKLE_PATH)
@@ -37,7 +41,7 @@ if today.day in [1, 15]:
 ![notification](demo/003_demo.png)
 
 #### tar.gz Slack Notification
-![tar notification](demo/tar_files.png)
+![tar notification](demo/tar_files_demo.png)
 
 ## Configs required
 A config file (txt) with variables:
