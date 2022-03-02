@@ -123,7 +123,7 @@ def messages(purpose, today, day, error_msg) -> str:
         'tar_notify':
         (
             'automated-tar-notify: '
-            '`tar.gz` files not modified in the last 3 month'
+            f'`tar.gz` files not modified in the last {TAR_MONTH} month'
             f'\nEarliest Date: {day[0]} -- Latest Date: {day[1]}'
             '\n_Please find complete list of file-id below:_'
         )
@@ -185,7 +185,7 @@ def post_message_to_slack(
 
             with open('tar.txt', 'w') as f:
                 for line in data:
-                    txt = ' '.join(line)
+                    txt = "\t".join(line)
                     f.write(f'{txt}\n')
 
             tar_file = {
@@ -207,14 +207,38 @@ def post_message_to_slack(
             # text (as seen in alert / countdown above)
             text_data = '\n'.join(data)
 
-            response = http.post(
-                'https://slack.com/api/chat.postMessage', {
-                    'token': SLACK_TOKEN,
-                    'channel': f'#{channel}',
-                    'attachments': json.dumps([{
-                        "pretext": message,
-                        "text": text_data}])
-                }).json()
+            if len(text_data) < 4000:
+
+                response = http.post(
+                    'https://slack.com/api/chat.postMessage', {
+                        'token': SLACK_TOKEN,
+                        'channel': f'#{channel}',
+                        'attachments': json.dumps([{
+                            "pretext": message,
+                            "text": text_data}])
+                    }).json()
+            else:
+                with open('sample.txt', 'w') as f:
+                    for line in data:
+                        line = line.lstrip('<').rstrip('>').replace('|', '\t')
+                        f.write(f'{line}\n')
+
+                tar_file = {
+                    'file': ('sample.txt', open('sample.txt', 'rb'), 'txt')
+                    }
+
+                message += '\n_Message too long to be sent as text_'
+                response = http.post(
+                    'https://slack.com/api/files.upload',
+                    params={
+                        'token': SLACK_TOKEN,
+                        'channels': f'#{channel}',
+                        'initial_comment': message,
+                        'filename': 'to_be_archived.txt',
+                        'filetype': 'txt'
+                    },
+                    files=tar_file
+                    ).json()
 
         if response['ok']:
             log.info(f'POST request to channel #{channel} successful')
@@ -331,7 +355,7 @@ def check_dir(dir, month) -> bool:
     for the last X month. If yes, return True.
 
     Inputs:
-        directory, X month
+        trimmed directory, X month
 
     Returns:
         Boolean:
@@ -343,13 +367,16 @@ def check_dir(dir, month) -> bool:
         dx.find_projects(
             dir,
             name_mode='regexp',
-            describe=True))
+            describe=True,
+            limit=1))
 
+    # if no 002/003 project
     if not result:
         return False
 
     modified_epoch = result[0]['describe']['modified']
 
+    # check modified date of the 002/003 proj
     if older_than(month, modified_epoch):
         return True
     else:
@@ -470,24 +497,32 @@ def get_all_old_enough_projs(month2, month3, archive_dict) -> dict:
     projects_dict_002, projects_dict_003 = get_all_projs()
 
     # sieve the dict to include only old-enough projs
+    # and if dataUsage != archivedDataUsage
+    # if dataUsage == archivedDataUsage, it means
+    # all data within the proj have been archived
+    # if proj or certain files within was unarchived
+    # # the dataUsage should != archivedDataUsage
     old_enough_projects_dict_002 = {
-        k: v for k, v in projects_dict_002.items() if older_than(
-            month2, v['describe']['modified'])}
+        k: v for k, v in projects_dict_002.items() if
+        older_than(month2, v['describe']['modified']) and
+        v['describe']['dataUsage'] != v['describe']['archivedDataUsage']
+        }
     old_enough_projects_dict_003 = {
-        k: v for k, v in projects_dict_003.items() if older_than(
-            month3, v['describe']['modified'])}
+        k: v for k, v in projects_dict_003.items() if
+        older_than(month3, v['describe']['modified']) and
+        v['describe']['dataUsage'] != v['describe']['archivedDataUsage']
+        }
 
     old_enough_projects_dict = {
         **old_enough_projects_dict_002, **old_enough_projects_dict_003}
 
+    # exclude staging52 & 53 (just in case)
     excluded_list = [PROJECT_52, PROJECT_53]
-    # get all recognized as archived to exclude
-    archived_list = archive_dict['archived'] + archive_dict['already_archived']
 
     # exclude projs (staging52/53) and archived projs
     old_enough_projects_dict = {
         k: v for k, v in old_enough_projects_dict.items()
-        if k not in excluded_list and k not in archived_list
+        if k not in excluded_list
     }
 
     # get proj tagged archive
@@ -504,19 +539,17 @@ def get_all_old_enough_projs(month2, month3, archive_dict) -> dict:
     return old_enough_projects_dict
 
 
-def get_all_dirs(archive_dict, proj_52) -> list:
+def get_all_dirs(proj_52) -> list:
     """
     Function to get all directories in staging52
-    Exclude those which had been archived
 
     Inputs:
-        archive_dict: archive pickle to get previously archived directories
         proj_52: proj-id of staging52
 
     Return:
         List of tuple for ease of processing later on
-        Tuple content:
-        1. dir name (e.g. 210407_A01295_0010_AHWL5GDRXX) for 002 query
+        Tuple contains:
+        1. trimmed dir name (e.g. 210407_A01295_0010_AHWL5GDRXX) for 002 query
         2. original directory path (e.g. /210407_A01295_0010_AHWL5GDRXX/)
     """
 
@@ -534,13 +567,6 @@ def get_all_dirs(archive_dict, proj_52) -> list:
 
     # combine both directories
     all_directories = directories_in_52 + directories_in_52_processed
-
-    # remove dirs which had been archived
-    archived_dirs = archive_dict['archived_52'] \
-        + archive_dict['already_archived_52']
-
-    all_directories = [
-        dir for dir in all_directories if dir[1] not in archived_dirs]
 
     return all_directories
 
@@ -711,7 +737,7 @@ def find_projs_and_notify(archive_pickle, today) -> None:
     log.info(f'No. of old enough projects: {len(old_enough_projects_dict)}')
 
     # get all directories
-    all_directories = get_all_dirs(archive_pickle, PROJECT_52)
+    all_directories = get_all_dirs(PROJECT_52)
 
     log.info(f'Processing {len(all_directories)} directories in staging52')
 
@@ -724,7 +750,7 @@ def find_projs_and_notify(archive_pickle, today) -> None:
 
     # get proj-id of each projs
     if old_enough_projects_dict:
-        log.info('Processing projects')
+        log.info('Processing projects..')
 
         for k, v in old_enough_projects_dict.items():
             tags = [tag.lower() for tag in v['describe']['tags']]
@@ -768,68 +794,91 @@ def find_projs_and_notify(archive_pickle, today) -> None:
 
     # sieve through each directory in staging52
     if old_enough_directories:
-        log.info('Processing directories')
+        log.info('Processing directories..')
 
+        # for building proj link
         trimmed_proj = PROJECT_52.lstrip('project-')
 
         for _, original_dir in old_enough_directories:
 
             trimmed_dir = original_dir.lstrip('/')
 
-            # if there's 'never-archive' tag in any file, continue
-            never_archive = list(dx.find_data_objects(
-                project=PROJECT_52,
-                folder=original_dir,
-                tags=['never-archive']
-            ))
+            all_files = list(
+                dx.find_data_objects(
+                    project=PROJECT_52,
+                    folder=original_dir,
+                    describe=True))
 
-            if never_archive:
-                log.info(f'NEVER_ARCHIVE: {original_dir} in staging52')
-                continue
+            # exclude 'record-123' etc.
+            all_files = [x for x in all_files if 'file' in x['id']]
 
-            # check for 'no-archive' tag in any files
-            files = list(dx.find_data_objects(
-                project=PROJECT_52,
-                folder=original_dir,
-                tags=['no-archive'],
-                describe=True
-            ))
+            # get all files' archivalStatus
+            status = set([x['describe']['archivalState'] for x in all_files])
 
-            STAGING_PREFIX = f'{URL_PREFIX}/{trimmed_proj}/data'
+            # if there're files in dir with 'live' status
+            if 'live' in status:
+                # if there's 'never-archive' tag in any file, continue
+                never_archive = list(dx.find_data_objects(
+                    project=PROJECT_52,
+                    folder=original_dir,
+                    tags=['never-archive']
+                ))
 
-            if not files:
-                # if there's no 'no-archive' tag or 'never-archive' tag
-                archive_pickle[f'staging_52'].append(original_dir)
-                to_be_archived_dir.append(
-                    f'<{STAGING_PREFIX}/{trimmed_dir}|{original_dir}>')
-            else:
-                # if there's 'no-archive' tag
-                # check if files are active in the last X month
-                # when tagged, modified date will change
-                # if modified date > x month, we know the tag was
-                # probably there for quite a while
-                # if all tagged files have modified date > x month
-                # we remove tags and put in special list, else skip
-                if all(
-                    [older_than(
-                            MONTH2, f['describe']['modified']) for f in files]
-                            ):
-                    log.info(
-                        f'REMOVE_TAG: removing tag for {len(files)} file(s)')
-                    for file in files:
-                        dx.api.file_remove_tags(
-                            file['id'],
-                            input_params={
-                                'tags': ['no-archive'],
-                                'project': PROJECT_52})
-                    special_notify_list.append(
-                        f'{original_dir} in `staging52`')
+                if never_archive:
+                    log.info(f'NEVER_ARCHIVE: {original_dir} in staging52')
+                    continue
+
+                # check for 'no-archive' tag in any files
+                files = list(dx.find_data_objects(
+                    project=PROJECT_52,
+                    folder=original_dir,
+                    tags=['no-archive'],
+                    describe=True
+                ))
+
+                STAGING_PREFIX = f'{URL_PREFIX}/{trimmed_proj}/data'
+
+                if not files:
+                    # there's no 'no-archive' tag or 'never-archive' tag
                     archive_pickle[f'staging_52'].append(original_dir)
                     to_be_archived_dir.append(
                         f'<{STAGING_PREFIX}/{trimmed_dir}|{original_dir}>')
                 else:
-                    log.info(f'SKIPPED: {original_dir} in staging52')
-                    continue
+                    # if there's 'no-archive' tag
+                    # check if all files are active in the last X month
+                    # when tagged, modified date will change
+                    # if modified date > x month, we know the tag was
+                    # probably there for quite a while
+                    # if all tagged files have modified date > x month
+                    # we remove tags and list dir for archiving
+                    if all(
+                        [older_than(
+                                MONTH2,
+                                f['describe']['modified']) for f in files]
+                                ):
+
+                        log.info(
+                            f'REMOVE_TAG: removing tag \
+                                for {len(files)} file(s)')
+
+                        for file in files:
+                            dx.api.file_remove_tags(
+                                file['id'],
+                                input_params={
+                                    'tags': ['no-archive'],
+                                    'project': PROJECT_52})
+                        special_notify_list.append(
+                            f'{original_dir} in `staging52`')
+                        archive_pickle[f'staging_52'].append(original_dir)
+                        to_be_archived_dir.append(
+                            f'<{STAGING_PREFIX}/{trimmed_dir}|{original_dir}>')
+                    else:
+                        log.info(f'SKIPPED: {original_dir} in staging52')
+                        continue
+            else:
+                # no 'live' status in dir == all files been archived
+                log.info(f'ALL ARCHIVED: {original_dir} in staging52')
+                continue
 
     no_archive_list, never_archive_list = get_tag_status(PROJECT_52)
 
@@ -847,12 +896,14 @@ def find_projs_and_notify(archive_pickle, today) -> None:
         current_usr = None
         for link in temp003:
             if current_usr != link['user']:
+                proj003.append('\n')
                 current_usr = link['user']
 
                 if current_usr in MEMBER_LIST.keys():
                     proj003.append(f'<@{MEMBER_LIST[current_usr]}>')
                 else:
                     proj003.append(f'Can\'t find ID for: {current_usr}')
+
             proj003.append(link['link'])
 
     big_list = [
@@ -1064,7 +1115,11 @@ def get_old_tar_and_notify() -> None:
     filtered_result = [
         x for x in result if older_than(TAR_MONTH, x['describe']['modified'])]
 
-    id_results = [(x['id'], x['describe']['folder']) for x in filtered_result]
+    id_results = [
+        (
+            x['id'],
+            x['describe']['folder'],
+            x['describe']['name']) for x in filtered_result]
 
     dates = [make_datetime_format(
         d['describe']['modified']) for d in filtered_result]
