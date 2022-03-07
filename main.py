@@ -207,7 +207,8 @@ def post_message_to_slack(
             # text (as seen in alert / countdown above)
             text_data = '\n'.join(data)
 
-            if len(text_data) < 4000:
+            # number above 15,000 seems to get truncation
+            if len(text_data) < 15000:
 
                 response = http.post(
                     'https://slack.com/api/chat.postMessage', {
@@ -218,27 +219,27 @@ def post_message_to_slack(
                             "text": text_data}])
                     }).json()
             else:
-                with open('sample.txt', 'w') as f:
-                    for line in data:
-                        line = line.lstrip('<').rstrip('>').replace('|', '\t')
-                        f.write(f'{line}\n')
+                # chunk data into fixed chunk length if data is too long
+                # number above 40 seems to get weird Slack message truncation
+                # thus, trial-n-error settled at 40
+                chunks = chunker(data, 40)
 
-                tar_file = {
-                    'file': ('sample.txt', open('sample.txt', 'rb'), 'txt')
-                    }
+                log.info(f'Sending data in {len(chunks)} chunks')
 
-                message += '\n_Message too long to be sent as text_'
-                response = http.post(
-                    'https://slack.com/api/files.upload',
-                    params={
-                        'token': SLACK_TOKEN,
-                        'channels': f'#{channel}',
-                        'initial_comment': message,
-                        'filename': 'to_be_archived.txt',
-                        'filetype': 'txt'
-                    },
-                    files=tar_file
-                    ).json()
+                for chunk in chunks:
+                    text_data = '\n'.join(chunk)
+
+                    response = http.post(
+                        'https://slack.com/api/chat.postMessage', {
+                            'token': SLACK_TOKEN,
+                            'channel': f'#{channel}',
+                            'attachments': json.dumps([{
+                                "pretext": message,
+                                "text": text_data}])
+                        }).json()
+
+                    if not response['ok']:
+                        break
 
         if response['ok']:
             log.info(f'POST request to channel #{channel} successful')
@@ -303,6 +304,23 @@ def send_mail(send_from, send_to, subject, text) -> None:
 
     except Exception as e:
         log.error('Server error email FAILED')
+
+
+def chunker(seq, size) -> list:
+    """
+    chunk long string into size
+
+    Input:
+        1. seq: string of text
+        2. size: chunk size
+
+    Returns:
+        list: list of chunked string
+    """
+
+    chunk_list = [seq[pos:pos + size] for pos in range(0, len(seq), size)]
+
+    return chunk_list
 
 
 def read_or_new_pickle(path) -> dict:
@@ -475,7 +493,7 @@ def get_all_projs() -> Union[dict, dict]:
     return projects_dict_002, projects_dict_003
 
 
-def get_all_old_enough_projs(month2, month3, archive_dict) -> dict:
+def get_all_old_enough_projs(month2, month3) -> dict:
     """
     Get all 002 and 003 projects which are not modified
     in the last X months. Exclude projects: staging 52
@@ -485,7 +503,6 @@ def get_all_old_enough_projs(month2, month3, archive_dict) -> dict:
     Input:
         month2: duration of inactivity in the last x month for 002
         month3: duration of inactivity in the last x month for 003
-        archive_dict: the archive pickle to remember what file to be archived
 
     Returns (dict):
         dictionary of key (proj-id) and
@@ -731,8 +748,7 @@ def find_projs_and_notify(archive_pickle, today) -> None:
     to_be_archived_dir = []
 
     # get all old enough projects
-    old_enough_projects_dict = get_all_old_enough_projs(
-        MONTH2, MONTH3, archive_pickle)
+    old_enough_projects_dict = get_all_old_enough_projs(MONTH2, MONTH3)
 
     log.info(f'No. of old enough projects: {len(old_enough_projects_dict)}')
 
