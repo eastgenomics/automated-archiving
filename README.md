@@ -9,6 +9,9 @@ Monthly check for archivable projects or directories on DNANexus & send Slack no
 ## Archive Pickle
 The script generates a pickle file at location specified at `AUTOMATED_ARCHIVE_PICKLE_PATH`. This acts as the memory of the script to remember to-be-archived projects and files
 
+## Member
+The script requires `members.py` in `member` folder on the server. The .py file should have a `MEMBER_LIST` which contain key `DNANexus Username` - value `Slack Username`
+
 ## Script Workflow
 When the script is executed, it checks if today is 1st or 15th of the month, if it is, it check for files in memory (to_be_archived, staging52). 
 
