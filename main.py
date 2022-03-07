@@ -1174,35 +1174,17 @@ def main():
         # we run archive function
         # else we find_and_notify
         if to_be_archived or staging52:
-            archiving_function(archive_pickle)
+            archiving_function(archive_pickle, today)
         else:
             find_projs_and_notify(archive_pickle, today)
 
-    elif today.day < 15:
+    else:
         log.info(today)
-        log.info('Today is within 1-15')
 
         if to_be_archived or staging52:
             # if there's to-be-archived in memory
             # we do the countdown to egg-alerts
             # else we just keep silence
-
-            next_archiving_date = get_next_archiving_date(today)
-            diff = next_archiving_date - today
-
-            post_message_to_slack(
-                'egg-alerts',
-                'countdown',
-                day=(diff.days, next_archiving_date),
-                )
-        else:
-            log.info('There is no data in memory')
-
-    else:
-        log.info(today)
-        log.info('Today is within 15-31')
-
-        if to_be_archived or staging52:
 
             next_archiving_date = get_next_archiving_date(today)
             diff = next_archiving_date - today
