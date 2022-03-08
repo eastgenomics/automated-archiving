@@ -227,7 +227,7 @@ def post_message_to_slack(
                 start = 0
                 end = 1
 
-                for index in range(0, len(data) + 1):
+                for index in range(1, len(data) + 1):
                     chunk = data[start:end]
 
                     if len('\n'.join(chunk)) < 7995:
