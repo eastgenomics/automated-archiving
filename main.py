@@ -207,8 +207,8 @@ def post_message_to_slack(
             # text (as seen in alert / countdown above)
             text_data = '\n'.join(data)
 
-            # number above 15,000 seems to get truncation
-            if len(text_data) < 15000:
+            # number above 7,995 seems to get truncation
+            if len(text_data) < 7995:
 
                 response = http.post(
                     'https://slack.com/api/chat.postMessage', {
@@ -219,10 +219,25 @@ def post_message_to_slack(
                             "text": text_data}])
                     }).json()
             else:
-                # chunk data into fixed chunk length if data is too long
-                # number above 40 seems to get weird Slack message truncation
-                # thus, trial-n-error settled at 40
-                chunks = chunker(data, 40)
+                # chunk data based on its length after '\n'.join()
+                # if > than 7,995 after join(), we append
+                # data[start:end-1] into chunks.
+                # start = end - 1 and repeat
+                chunks = []
+                start = 0
+                end = 1
+
+                for index in range(0, len(data) + 1):
+                    chunk = data[start:end]
+
+                    if len('\n'.join(chunk)) < 7995:
+                        end = index
+
+                        if end == len(data):
+                            chunks.append(data[start:end])
+                    else:
+                        chunks.append(data[start:end-1])
+                        start = end - 1
 
                 log.info(f'Sending data in {len(chunks)} chunks')
 
@@ -304,23 +319,6 @@ def send_mail(send_from, send_to, subject, text) -> None:
 
     except Exception as e:
         log.error('Server error email FAILED')
-
-
-def chunker(seq, size) -> list:
-    """
-    chunk long string into size
-
-    Input:
-        1. seq: string of text
-        2. size: chunk size
-
-    Returns:
-        list: list of chunked string
-    """
-
-    chunk_list = [seq[pos:pos + size] for pos in range(0, len(seq), size)]
-
-    return chunk_list
 
 
 def read_or_new_pickle(path) -> dict:
