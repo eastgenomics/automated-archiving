@@ -12,6 +12,7 @@ noted to-be-archive files. It skips files tagged with 'no-archive'
 
 import os
 import sys
+from xmlrpc.client import DateTime
 import requests
 import json
 import dxpy as dx
@@ -19,8 +20,11 @@ import pickle
 import collections
 import datetime as dt
 from dateutil.relativedelta import relativedelta
+from datetime import timedelta
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
+from member.members import MEMBER_LIST
+from typing import Union
 
 # for sending helpdesk email
 import smtplib
@@ -39,8 +43,11 @@ PROJECT_52 = os.environ['PROJECT_52']
 PROJECT_53 = os.environ['PROJECT_53']
 MONTH2 = int(os.environ['AUTOMATED_MONTH_002'])
 MONTH3 = int(os.environ['AUTOMATED_MONTH_003'])
+TAR_MONTH = int(os.environ['TAR_MONTH'])
+ARCHIVE_MODIFIED_MONTH = int(os.environ['ARCHIVE_MODIFIED_MONTH'])
 ARCHIVE_PICKLE_PATH = os.environ['AUTOMATED_ARCHIVE_PICKLE_PATH']
 ARCHIVED_TXT_PATH = os.environ['AUTOMATED_ARCHIVED_TXT_PATH']
+URL_PREFIX = 'https://platform.dnanexus.com/panx/projects'
 
 SERVER = os.environ['ANSIBLE_SERVER']
 PORT = os.environ['ANSIBLE_PORT']
@@ -48,7 +55,90 @@ SENDER = os.environ['ANSIBLE_SENDER']
 RECEIVERS = os.environ['ANSIBLE_RECEIVERS']
 
 
-def post_message_to_slack(channel, index, data, error='', alert=False) -> None:
+def messages(purpose, today, day, error_msg) -> str:
+    """
+    Function to return the right message for the give purpose
+
+    Inputs:
+        purpose: decide on which message to return (etc, 002_proj, alert..)
+        today: today's date to display on Slack message
+        day: tuple of dates (vary) depending on purpose
+        error_msg: error message from if purpose == alert (dxpy fail)
+
+    Return:
+        string of message
+    """
+
+    msgs = {
+        '002_proj':
+        (
+            f':bangbang: {today} *002 projects to be archived:*'
+            '\n_Please tag `no-archive` or `never-archive`_'
+            f'\n*Archive date: {day[0]}*'
+        ),
+        '003_proj':
+        (
+            f':bangbang: {today} *003 projects to be archived:*'
+            '\n_Please tag `no-archive` or `never-archive`_'
+            f'\n*Archive date: {day[0]}*'
+        ),
+        'staging_52':
+        (
+            f':bangbang: {today} *Directories in `staging52` to be archived:*'
+            '\n_Please tag `no-archive` or `never-archive`_'
+            f'\n*Archive date: {day[0]}*'
+        ),
+        'special_notify':
+        (
+            f':warning: {today} *Inactive project or directory to be archived*'
+            '\n_unless re-tag `no-archive` or `never-archive`_'
+            f'\n*Archive date: {day[0]}*'
+        ),
+        'no_archive':
+        (
+            f':male-detective: {today} *Projects or directory'
+            ' tagged with `no-archive`:*'
+            '\n_just for your information_'
+        ),
+        'never_archive':
+        (
+            f':female-detective: {today} *Projects or directory'
+            ' tagged with `never-archive`:*'
+            '\n_just for your information_'
+        ),
+        'archived':
+        (
+            ':closed_book: *Projects or directory archived:*'
+        ),
+        'countdown':
+        (
+            f'automated-archiving: '
+            f'{day[0]} day till archiving on {day[1]}'
+        ),
+        'alert':
+        (
+            "automated-archiving: Error with dxpy token! Error code:\n"
+            f"`{error_msg}`"
+        ),
+        'tar_notify':
+        (
+            'automated-tar-notify: '
+            f'`tar.gz` files not modified in the last {TAR_MONTH} month'
+            f'\nEarliest Date: {day[0]} -- Latest Date: {day[1]}'
+            '\n_Please find complete list of file-id below:_'
+        )
+    }
+
+    return msgs[purpose]
+
+
+def post_message_to_slack(
+        channel,
+        purpose,
+        data=None,
+        error=None,
+        day=(None, None)
+        ) -> None:
     """
     Request function for slack web api for:
     (1) send alert msg when dxpy auth failed (alert=True)
@@ -56,10 +146,11 @@ def post_message_to_slack(channel, index, data, error='', alert=False) -> None:
 
     Inputs:
         channel: e.g. egg-alerts, egg-logs
-        index: index for which proj in lists (below)
+        purpose: this decide what message to send
         data: list of projs / dirs to be archived
         error: (optional) (required only when dxpy auth failed) dxpy error msg
-        alert: (optional) (required only when dxpy auth failed) Boolean
+        day: (optional) tuple of (day till next date, next run date) depend
+        on purpose
 
     Return:
         None
@@ -71,72 +162,99 @@ def post_message_to_slack(channel, index, data, error='', alert=False) -> None:
 
     receivers = RECEIVERS.split(',') if ',' in RECEIVERS else [RECEIVERS]
 
-    lists = [
-        'proj_list',
-        'staging52',
-        'special_notify',
-        'no_archive',
-        'never_archive',
-        'error'
-        ]
-
-    log.info(f'Posting data for: {lists[index]}')
+    log.info(f'Posting data for: {purpose}')
 
     today = dt.date.today().strftime("%d/%m/%Y")
-    text_data = '\n'.join(sorted(data))
-
-    messages = [
-        (
-            f':bangbang: {today} *Projects to be archived:*'
-            '\n_Please tag `no-archive` or `never-archive`_'
-        ),
-        (
-            f':bangbang: {today} *Directories in `staging52` to be archived:*'
-            '\n_Please tag `no-archive` or `never-archive`_'
-            ),
-        (
-            f':warning: {today} *Inactive project or directory to be archived*'
-            '\n_unless re-tag `no-archive` or `never-archive`_'
-        ),
-        (
-            f':male-detective: {today} *Projects or directory'
-            ' tagged with `no-archive`:*'
-            '\n_just for your information_'
-        ),
-        (
-            f':female-detective: {today} *Projects or directory'
-            ' tagged with `never-archive`:*'
-            '\n_just for your information_'
-        )
-        ]
+    message = messages(purpose, today, day, error)
 
     log.info(f'Sending POST request to channel: #{channel}')
 
     try:
-        if alert:
-            # only for dxpy auth failure alert msg
-            error_msg = (
-                "automated-archiving: Error with dxpy token! Error code: \n"
-                f"`{error.error_message()}`"
-                )
-
+        if purpose in ['alert', 'countdown']:
             response = http.post(
                 'https://slack.com/api/chat.postMessage', {
                     'token': SLACK_TOKEN,
                     'channel': f'#{channel}',
-                    'text': error_msg
+                    'text': message
                 }).json()
+        elif purpose == 'tar_notify':
 
+            # tar_notify requires making a txt file of file-id
+            # then send file as attachment using an enctype
+            # of multipart/form-data
+
+            with open('tar.txt', 'w') as f:
+                for line in data:
+                    txt = "\t".join(line)
+                    f.write(f'{txt}\n')
+
+            tar_file = {
+                'file': ('tar.txt', open('tar.txt', 'rb'), 'txt')
+                }
+            response = http.post(
+                'https://slack.com/api/files.upload',
+                params={
+                    'token': SLACK_TOKEN,
+                    'channels': f'#{channel}',
+                    'initial_comment': message,
+                    'filename': 'tar.txt',
+                    'filetype': 'txt'
+                },
+                files=tar_file
+                ).json()
         else:
-            # default notification
-            response = http.post(
-                'https://slack.com/api/chat.postMessage', {
-                    'token': SLACK_TOKEN,
-                    'channel': f'#{channel}',
-                    'attachments': json.dumps([{
-                        "pretext": messages[index],
-                        "text": text_data}])
-                }).json()
+            # default notification which is an attachment rather than
+            # text (as seen in alert / countdown above)
+            text_data = '\n'.join(data)
+
+            # number above 7,995 seems to get truncation
+            if len(text_data) < 7995:
+
+                response = http.post(
+                    'https://slack.com/api/chat.postMessage', {
+                        'token': SLACK_TOKEN,
+                        'channel': f'#{channel}',
+                        'attachments': json.dumps([{
+                            "pretext": message,
+                            "text": text_data}])
+                    }).json()
+            else:
+                # chunk data based on its length after '\n'.join()
+                # if > than 7,995 after join(), we append
+                # data[start:end-1] into chunks.
+                # start = end - 1 and repeat
+                chunks = []
+                start = 0
+                end = 1
+
+                for index in range(1, len(data) + 1):
+                    chunk = data[start:end]
+
+                    if len('\n'.join(chunk)) < 7995:
+                        end = index
+
+                        if end == len(data):
+                            chunks.append(data[start:end])
+                    else:
+                        chunks.append(data[start:end-1])
+                        start = end - 1
+
+                log.info(f'Sending data in {len(chunks)} chunks')
+
+                for chunk in chunks:
+                    text_data = '\n'.join(chunk)
+
+                    response = http.post(
+                        'https://slack.com/api/chat.postMessage', {
+                            'token': SLACK_TOKEN,
+                            'channel': f'#{channel}',
+                            'attachments': json.dumps([{
+                                "pretext": message,
+                                "text": text_data}])
+                        }).json()
+
+                    if not response['ok']:
+                        break
 
         if response['ok']:
             log.info(f'POST request to channel #{channel} successful')
@@ -209,7 +327,7 @@ def read_or_new_pickle(path) -> dict:
     Using defaultdict() automatically create new dict.key()
 
     Input:
-        Path to store the pickle
+        Path to store the pickle (memory)
 
     Returns:
         dict: the stored pickle dict
@@ -253,7 +371,7 @@ def check_dir(dir, month) -> bool:
     for the last X month. If yes, return True.
 
     Inputs:
-        directory, X month
+        trimmed directory, X month
 
     Returns:
         Boolean:
@@ -265,13 +383,16 @@ def check_dir(dir, month) -> bool:
         dx.find_projects(
             dir,
             name_mode='regexp',
-            describe=True))
+            describe=True,
+            limit=1))
 
+    # if no 002/003 project
     if not result:
         return False
 
     modified_epoch = result[0]['describe']['modified']
 
+    # check modified date of the 002/003 proj
     if older_than(month, modified_epoch):
         return True
     else:
@@ -280,7 +401,8 @@ def check_dir(dir, month) -> bool:
 
 def dx_login() -> None:
     """
-    DNANexus login check function
+    DNANexus login check function.
+    If fail, send Slack notification
 
     Returns:
         None
@@ -298,23 +420,22 @@ def dx_login() -> None:
         dx.api.system_whoami()
         log.info('DNANexus login successful')
 
-    except Exception as e:
+    except Exception as err:
+        error_msg = err.error_message()
         log.error('Error with DNANexus login')
-        log.error(f'Error message from DNANexus{e.error_message()}')
+        log.error(f'Error message from DNANexus: {error_msg}')
 
         post_message_to_slack(
             'egg-alerts',
-            5,
-            [],
-            error=e,
-            alert=True
+            'alert',
+            error=error_msg,
             )
 
         log.info('End of script')
         sys.exit()
 
 
-def remove_proj_tag(proj) -> str:
+def remove_proj_tag(proj) -> None:
     """
     Function to remove tag 'no-archive' for project
 
@@ -333,12 +454,12 @@ def remove_proj_tag(proj) -> str:
         project-id of tag-removed project
     """
 
-    response = dx.api.project_remove_tags(
+    log.info(f'REMOVE_TAG: {proj}')
+    dx.api.project_remove_tags(
         proj, input_params={'tags': ['no-archive']})
-    return response['id']
 
 
-def get_all_projs():
+def get_all_projs() -> Union[dict, dict]:
     """
     Get all 002 and 003 projects
 
@@ -370,7 +491,7 @@ def get_all_projs():
     return projects_dict_002, projects_dict_003
 
 
-def get_all_old_enough_projs(month2, month3, archive_dict) -> dict:
+def get_all_old_enough_projs(month2, month3) -> dict:
     """
     Get all 002 and 003 projects which are not modified
     in the last X months. Exclude projects: staging 52
@@ -378,8 +499,8 @@ def get_all_old_enough_projs(month2, month3, archive_dict) -> dict:
     which had been archived.
 
     Input:
-        month: duration of inactivity in the last x month
-        archive_dict: the archive pickle to remember what file to be archived
+        month2: duration of inactivity in the last x month for 002
+        month3: duration of inactivity in the last x month for 003
 
     Returns (dict):
         dictionary of key (proj-id) and
@@ -391,40 +512,59 @@ def get_all_old_enough_projs(month2, month3, archive_dict) -> dict:
     projects_dict_002, projects_dict_003 = get_all_projs()
 
     # sieve the dict to include only old-enough projs
+    # and if dataUsage != archivedDataUsage
+    # if dataUsage == archivedDataUsage, it means
+    # all data within the proj have been archived
+    # if proj or certain files within was unarchived
+    # # the dataUsage should != archivedDataUsage
     old_enough_projects_dict_002 = {
-        k: v for k, v in projects_dict_002.items() if older_than(
-            month2, v['describe']['modified'])}
+        k: v for k, v in projects_dict_002.items() if
+        older_than(month2, v['describe']['modified']) and
+        v['describe']['dataUsage'] != v['describe']['archivedDataUsage']
+        }
     old_enough_projects_dict_003 = {
-        k: v for k, v in projects_dict_003.items() if older_than(
-            month3, v['describe']['modified'])}
+        k: v for k, v in projects_dict_003.items() if
+        older_than(month3, v['describe']['modified']) and
+        v['describe']['dataUsage'] != v['describe']['archivedDataUsage']
+        }
 
     old_enough_projects_dict = {
         **old_enough_projects_dict_002, **old_enough_projects_dict_003}
 
+    # exclude staging52 & 53 (just in case)
     excluded_list = [PROJECT_52, PROJECT_53]
 
     # exclude projs (staging52/53) and archived projs
     old_enough_projects_dict = {
         k: v for k, v in old_enough_projects_dict.items()
-        if k not in excluded_list and k not in archive_dict['archived']
+        if k not in excluded_list
     }
+
+    # get proj tagged archive
+    tagged_archive_proj = list(dx.search.find_projects(
+        name='^00[2,3].*',
+        name_mode='regexp',
+        tags=['archive'],
+        describe=True
+    ))
+
+    old_enough_projects_dict.update(
+        {proj['id']: proj for proj in tagged_archive_proj})
 
     return old_enough_projects_dict
 
 
-def get_all_dirs(archive_dict, proj_52) -> list:
+def get_all_dirs(proj_52) -> list:
     """
     Function to get all directories in staging52
-    Exclude those which had been archived
 
     Inputs:
-        archive_dict: archive pickle to get previously archived directories
         proj_52: proj-id of staging52
 
     Return:
         List of tuple for ease of processing later on
-        Tuple content:
-        1. dir name (e.g. 210407_A01295_0010_AHWL5GDRXX) for 002 query
+        Tuple contains:
+        1. trimmed dir name (e.g. 210407_A01295_0010_AHWL5GDRXX) for 002 query
         2. original directory path (e.g. /210407_A01295_0010_AHWL5GDRXX/)
     """
 
@@ -443,11 +583,6 @@ def get_all_dirs(archive_dict, proj_52) -> list:
     # combine both directories
     all_directories = directories_in_52 + directories_in_52_processed
 
-    # remove dirs which had been archived
-    archived_dirs = archive_dict['archived_52']
-    all_directories = [
-        dir for dir in all_directories if dir[1] not in archived_dirs]
-
     return all_directories
 
 
@@ -457,14 +592,16 @@ def archive_skip_function(dir, proj, archive_dict, temp_dict) -> None:
 
     If there is 'never-archive', return
 
+    If recently modified, return
+
     If there is 'no-archive' tag in any file within the directory,
-    the dir will be skipped, folder is remembered in archive_pickle['skipped']
+    the dir will be skipped
 
     If there is no tag in any files, directory will be archived.
 
     Input:
         dir: directory in staging52
-        proj: staging52
+        proj: staging52 project id
         archive_dict: the archive pickle for remembering skipped and
                         archived files
         temp_dict: temporary dictionary for slack notification later
@@ -483,6 +620,20 @@ def archive_skip_function(dir, proj, archive_dict, temp_dict) -> None:
         log.info(f'NEVER_ARCHIVE: {dir} in staging52')
         return
 
+    # 2 * 4 week = 8 weeks
+    num_weeks = ARCHIVE_MODIFIED_MONTH * 4
+
+    # check if there's any files modified in the last num_weeks
+    recent_modified = list(dx.find_data_objects(
+        project=proj,
+        folder=dir,
+        modified_after=f'-{num_weeks}w'
+    ))
+
+    if recent_modified:
+        log.info(f'RECENTLY MODIFIED: {dir} in staging52')
+        return
+
     folders = list(dx.find_data_objects(
         project=proj,
         folder=dir,
@@ -491,15 +642,19 @@ def archive_skip_function(dir, proj, archive_dict, temp_dict) -> None:
 
     if folders:
         log.info(f'SKIPPED: {dir} in staging52')
+        return
     else:
         log.info(f'ARCHIVING staging52: {dir}')
-        dx.api.project_archive(
+        res = dx.api.project_archive(
             proj, input_params={'folder': dir})
-        archive_dict[f'archived_52'].append(dir)
-        temp_dict['archived'].append(f'{proj}:{dir}')
+        if res['count'] != 0:
+            archive_dict['archived_52'].append(dir)
+            temp_dict['archived'].append(f'{proj}:{dir}')
+        else:
+            archive_dict['already_archived_52'].append(dir)
 
 
-def get_tag_status(proj_52):
+def get_tag_status(proj_52) -> Union[list, list]:
     """
     Function to get the latest tag status in staging52 and projects
 
@@ -507,7 +662,8 @@ def get_tag_status(proj_52):
         proj_52: staging52 project-id
 
     Returns:
-        2 list
+        2 list of proj & directories in staging52 tagged with either
+        no-archive and never-archive
     """
 
     no_archive_list = []
@@ -564,32 +720,38 @@ def get_tag_status(proj_52):
     return no_archive_list, never_archive_list
 
 
-def find_projs_and_notify(archive_pickle):
+def find_projs_and_notify(archive_pickle, today) -> None:
     """
     Function to find projs or directories in staging52
     which has not been modified in the last X months (inactive)
-    and send Slack notification about it.
+    and send Slack notification.
+
+    Inputs:
+        archive_pickle: to remember to-be-archived files
+        today: today's date to get next_archiving date + include
+        in Slack notification
+
+    Return:
+        None
     """
 
     log.info('Start finding projs and notify')
-
-    dx_login()
 
     # special notify include those projs / directories in staging52
     # which has been tagged 'no-archive' before but has not been modified
     # for X months. It will be listed under its own column in Slack msg
     # to make it more visible
     special_notify_list = []
-    to_be_archived_list = []
+    to_be_archived_list = collections.defaultdict(list)
+    to_be_archived_dir = []
 
     # get all old enough projects
-    old_enough_projects_dict = get_all_old_enough_projs(
-        MONTH2, MONTH3, archive_pickle)
+    old_enough_projects_dict = get_all_old_enough_projs(MONTH2, MONTH3)
 
     log.info(f'No. of old enough projects: {len(old_enough_projects_dict)}')
 
     # get all directories
-    all_directories = get_all_dirs(archive_pickle, PROJECT_52)
+    all_directories = get_all_dirs(PROJECT_52)
 
     log.info(f'Processing {len(all_directories)} directories in staging52')
 
@@ -602,10 +764,13 @@ def find_projs_and_notify(archive_pickle):
 
     # get proj-id of each projs
     if old_enough_projects_dict:
-        log.info('Processing projects')
+        log.info('Processing projects..')
 
         for k, v in old_enough_projects_dict.items():
             tags = [tag.lower() for tag in v['describe']['tags']]
+            proj_name = v['describe']['name']
+            trimmed_id = k.lstrip('project-')
+            created_by = v['describe']['createdBy']['user']
 
             # if 'never-archive', move on
             # if 'no-archive', remove and put it in
@@ -616,93 +781,172 @@ def find_projs_and_notify(archive_pickle):
                 log.info(f'NEVER_ARCHIVE: {k}')
                 continue
             elif 'no-archive' in tags:
-                id = remove_proj_tag(k)
-                log.info(f'REMOVE_TAG: {id}')
+                remove_proj_tag(k)
 
-                special_notify_list.append(v['describe']['name'])
-                archive_pickle['to_be_archived'].append(v['id'])
-                to_be_archived_list.append(v['describe']['name'])
+                special_notify_list.append(proj_name)
+                archive_pickle['to_be_archived'].append(k)
 
+                if proj_name.startswith('002'):
+                    to_be_archived_list['002'].append(
+                        f'<{URL_PREFIX}/{trimmed_id}/|{proj_name}>')
+                else:
+                    to_be_archived_list['003'].append({
+                        'user': created_by,
+                        'link': f'<{URL_PREFIX}/{trimmed_id}/|{proj_name}>'
+                    })
             else:
-                archive_pickle['to_be_archived'].append(v['id'])
-                to_be_archived_list.append(v['describe']['name'])
+                # all tagged 'archive' + the rest will end up here
+                archive_pickle['to_be_archived'].append(k)
+                if proj_name.startswith('002'):
+                    to_be_archived_list['002'].append(
+                        f'<{URL_PREFIX}/{trimmed_id}/|{proj_name}>')
+                else:
+                    to_be_archived_list['003'].append({
+                        'user': created_by,
+                        'link': f'<{URL_PREFIX}/{trimmed_id}/|{proj_name}>'
+                    })
 
     # sieve through each directory in staging52
     if old_enough_directories:
-        log.info('Processing directories')
+        log.info('Processing directories..')
+
+        # for building proj link
+        trimmed_proj = PROJECT_52.lstrip('project-')
 
         for _, original_dir in old_enough_directories:
-            # if there's 'never-archive' tag in any file, continue
-            never_archive = list(dx.find_data_objects(
-                project=PROJECT_52,
-                folder=original_dir,
-                tags=['never-archive']
-            ))
 
-            if never_archive:
-                log.info(f'NEVER_ARCHIVE: {original_dir} in staging52')
-                continue
+            trimmed_dir = original_dir.lstrip('/')
 
-            # check for 'no-archive' tag in any files
-            files = list(dx.find_data_objects(
-                project=PROJECT_52,
-                folder=original_dir,
-                tags=['no-archive'],
-                describe=True
-            ))
+            all_files = list(
+                dx.find_data_objects(
+                    project=PROJECT_52,
+                    folder=original_dir,
+                    describe=True))
 
-            if not files:
-                archive_pickle[f'staging_52'].append(original_dir)
-            else:
-                # check if files are active in the last X month
-                # if no, remove tag and list for special notify
-                # if yes, continue
-                if any(
-                    [older_than(
-                            MONTH2, f['describe']['modified']) for f in files]
-                            ):
-                    log.info(
-                        f'REMOVE_TAG: removing tag for {len(files)} file(s)')
-                    for file in files:
-                        dx.api.file_remove_tags(
-                            file['id'],
-                            input_params={
-                                'tags': ['no-archive'],
-                                'project': PROJECT_52})
-                    special_notify_list.append(
-                        f'{original_dir} in `staging52`')
-                    archive_pickle[f'staging_52'].append(original_dir)
-                else:
-                    log.info(f'SKIPPED: {original_dir} in staging52')
+            # exclude 'record-123' etc.
+            all_files = [x for x in all_files if 'file' in x['id']]
+
+            # get all files' archivalStatus
+            status = set([x['describe']['archivalState'] for x in all_files])
+
+            # if there're files in dir with 'live' status
+            if 'live' in status:
+                # if there's 'never-archive' tag in any file, continue
+                never_archive = list(dx.find_data_objects(
+                    project=PROJECT_52,
+                    folder=original_dir,
+                    tags=['never-archive']
+                ))
+
+                if never_archive:
+                    log.info(f'NEVER_ARCHIVE: {original_dir} in staging52')
                     continue
+
+                # check for 'no-archive' tag in any files
+                files = list(dx.find_data_objects(
+                    project=PROJECT_52,
+                    folder=original_dir,
+                    tags=['no-archive'],
+                    describe=True
+                ))
+
+                STAGING_PREFIX = f'{URL_PREFIX}/{trimmed_proj}/data'
+
+                if not files:
+                    # there's no 'no-archive' tag or 'never-archive' tag
+                    archive_pickle[f'staging_52'].append(original_dir)
+                    to_be_archived_dir.append(
+                        f'<{STAGING_PREFIX}/{trimmed_dir}|{original_dir}>')
+                else:
+                    # if there's 'no-archive' tag
+                    # check if all files are active in the last X month
+                    # when tagged, modified date will change
+                    # if modified date > x month, we know the tag was
+                    # probably there for quite a while
+                    # if all tagged files have modified date > x month
+                    # we remove tags and list dir for archiving
+                    if all(
+                        [older_than(
+                                MONTH2,
+                                f['describe']['modified']) for f in files]
+                                ):
+
+                        log.info(
+                            f'REMOVE_TAG: removing tag \
+                                for {len(files)} file(s)')
+
+                        for file in files:
+                            dx.api.file_remove_tags(
+                                file['id'],
+                                input_params={
+                                    'tags': ['no-archive'],
+                                    'project': PROJECT_52})
+                        special_notify_list.append(
+                            f'{original_dir} in `staging52`')
+                        archive_pickle[f'staging_52'].append(original_dir)
+                        to_be_archived_dir.append(
+                            f'<{STAGING_PREFIX}/{trimmed_dir}|{original_dir}>')
+                    else:
+                        log.info(f'SKIPPED: {original_dir} in staging52')
+                        continue
+            else:
+                # no 'live' status in dir == all files been archived
+                log.info(f'ALL ARCHIVED: {original_dir} in staging52')
+                continue
 
     no_archive_list, never_archive_list = get_tag_status(PROJECT_52)
 
     # get everything ready for slack notification
-    proj_list = to_be_archived_list
-    folders52 = archive_pickle['staging_52']
+    proj002 = sorted(to_be_archived_list['002'])
+    proj003 = []
+    folders52 = sorted(to_be_archived_dir)
+    no_archive_list = sorted(no_archive_list)
+    never_archive_list = sorted(never_archive_list)
 
-    lists = [
-          proj_list,
-          folders52,
-          special_notify_list,
-          no_archive_list,
-          never_archive_list
+    # process 003 list to sort by user
+    temp003 = to_be_archived_list['003']
+    if temp003:
+        temp003 = sorted(temp003, key=lambda d: d['user'])
+        current_usr = None
+        for link in temp003:
+            if current_usr != link['user']:
+                proj003.append('\n')
+                current_usr = link['user']
+
+                if current_usr in MEMBER_LIST.keys():
+                    proj003.append(f'<@{MEMBER_LIST[current_usr]}>')
+                else:
+                    proj003.append(f'Can\'t find ID for: {current_usr}')
+
+            proj003.append(link['link'])
+
+    big_list = [
+          ('002_proj', proj002),
+          ('003_proj', proj003),
+          ('staging_52', folders52),
+          ('special_notify', special_notify_list),
+          ('no_archive', no_archive_list),
+          ('never_archive', never_archive_list)
         ]
 
     # send slack notification if there's old-enough dir / projs
-    for index, data in enumerate(lists):
+    next_archiving_date = get_next_archiving_date(today)
+
+    for purpose, data in big_list:
         if data:
+            data.append('-- END OF MESSAGE --')
+
             post_message_to_slack(
-                channel='egg-alerts',
-                index=index,
-                data=data
+                'egg-alerts',
+                purpose,
+                data=data,
+                day=(next_archiving_date, None)
                 )
         else:
             continue
 
     # save dict (only if there's to-be-archived)
-    if proj_list or folders52:
+    if proj002 or proj003 or folders52:
         log.info('Writing into pickle file')
         with open(ARCHIVE_PICKLE_PATH, 'wb') as f:
             pickle.dump(archive_pickle, f)
@@ -710,24 +954,26 @@ def find_projs_and_notify(archive_pickle):
     log.info('End of finding projs and notify')
 
 
-def archiving_function(archive_pickle):
+def archiving_function(archive_pickle, today) -> None:
     """
-    Function to check previously listed projs and dirs
-    which have not been modified (inactive) in the last X months
+    Function to check previously listed projs and dirs (memory)
     and do the archiving.
 
-    Skip projs tagged 'no-archive' or any directory with one file within
+    Skip projs if:
+    1. tagged 'no-archive' or any directory with one file within
     tagged with 'no-archive'
+    2. modified in the past TAR_MONTH month
+    3. tagged 'never-archive'
 
     """
 
     log.info('Start archiving function')
 
-    dx_login()
-
     list_of_projs = archive_pickle['to_be_archived']
     list_of_dirs_52 = archive_pickle['staging_52']
 
+    # just for recording what has been archived
+    # plus for Slack notification
     temp_archived = collections.defaultdict(list)
 
     # do the archiving
@@ -736,33 +982,75 @@ def archiving_function(archive_pickle):
             project = dx.DXProject(id)
             proj_desc = project.describe()
             proj_name = proj_desc['name']
+            modified_epoch = proj_desc['modified']
 
-            # check if proj been tagged with 'no-archive'
             if 'never-archive' in proj_desc['tags']:
                 log.info(f'NEVER_ARCHIVE: {proj_name}')
                 continue
             elif 'no-archive' in proj_desc['tags']:
                 log.info(f'SKIPPED: {proj_name}')
                 continue
-            else:
+            elif 'archive' in proj_desc['tags']:
+                # if archive tag in proj
+                # we do archiving
                 log.info(f'ARCHIVING {id}')
-                dx.api.project_archive(id)
-                archive_pickle['archived'].append(id)
-                temp_archived['archived'].append(id)
+                res = dx.api.project_archive(id)
+                if res['count'] != 0:
+                    archive_pickle['archived'].append(id)
+                    temp_archived['archived'].append(id)
+                else:
+                    archive_pickle['already_archived'].append(id)
+            else:
+                if older_than(ARCHIVE_MODIFIED_MONTH, modified_epoch):
+                    # True if not modified in the last
+                    # ARCHIVE_MODIFIED_MONTH month
+
+                    log.info(f'ARCHIVING {id}')
+                    res = dx.api.project_archive(id)
+                    # if res.count = 0, no files are being archived
+                    # which might mean all files are already archived
+                    # before this script runs on it. So we save it
+                    # into memory (already_archived)
+                    # we recognize archived only on res.count != 0
+                    # meaning the script did archive something
+                    # in the project
+                    if res['count'] != 0:
+                        archive_pickle['archived'].append(id)
+                        temp_archived['archived'].append(id)
+                    else:
+                        archive_pickle['already_archived'].append(id)
+                else:
+                    # end up here if proj is not older than
+                    # ARCHIVE_MODIFIED_MONTH, meaning
+                    # proj has been modified recently, so we skip
+                    log.info(f'RECENTLY MODIFIED & SKIPPED: {proj_name}')
+                    continue
 
     if list_of_dirs_52:
         for dir in list_of_dirs_52:
             archive_skip_function(
                 dir, PROJECT_52, archive_pickle, temp_archived)
 
-    # generate archiving log file
-    if os.path.isfile(ARCHIVED_TXT_PATH):
-        with open(ARCHIVED_TXT_PATH, 'a') as f:
-            for line in temp_archived['archived']:
-                f.write('\n' + line)
-    else:
-        with open(ARCHIVED_TXT_PATH, 'w') as f:
-            f.write('\n'.join(temp_archived['archived']))
+    # generate archiving txt file
+    # ONLY IF THERE IS FILEs BEING ARCHIVED
+    if temp_archived:
+        if os.path.isfile(ARCHIVED_TXT_PATH):
+            with open(ARCHIVED_TXT_PATH, 'a') as f:
+                f.write(f'=== {today} ===')
+
+                for line in temp_archived['archived']:
+                    f.write('\n' + line)
+        else:
+            with open(ARCHIVED_TXT_PATH, 'w') as f:
+                f.write(f'=== {today} ===')
+                f.write('\n'.join(temp_archived['archived']))
+
+        # also send a notification to say what have been archived
+        post_message_to_slack(
+            'egg-alerts',
+            'archived',
+            data=temp_archived['archived']
+            )
 
     # empty pickle
     log.info('Clearing pickle file')
@@ -777,7 +1065,90 @@ def archiving_function(archive_pickle):
 
     log.info('End of archiving function')
 
-    find_projs_and_notify(archive_pickle)
+    find_projs_and_notify(archive_pickle, today)
+
+
+def get_next_archiving_date(today) -> DateTime:
+    """
+    Function to get the next automated-archive run date
+
+    Input:
+        today (datetime)
+
+    Return (datetime):
+        If today.day is between 1-15: return 15th of this month
+        If today.day is after 15: return 1st day of next month
+
+    """
+
+    while today.day not in [1, 15]:
+        today += dt.timedelta(1)
+
+    return today
+
+
+def make_datetime_format(modified_epoch) -> DateTime:
+    """
+    Function to turn modified epoch (returned by DNANexus)
+    into readable datetime format
+
+    Input:
+        epoch modified datetime from dnanexus describe
+
+    Return:
+        datetime
+
+    """
+
+    modified = modified_epoch / 1000.0
+    modified_dt = dt.datetime.fromtimestamp(modified)
+
+    return modified_dt
+
+
+def get_old_tar_and_notify() -> None:
+    """
+    Function to get tar which are not modified in the last 3 months
+    Regex Format:
+        only returns "run.....tar.gz" in staging52
+
+    Return:
+        None
+
+    """
+    log.info('Getting old tar.gz in staging52')
+
+    result = list(
+        dx.find_data_objects(
+            name='^run.*.tar.gz',
+            name_mode='regexp',
+            describe=True,
+            project=PROJECT_52))
+
+    # list of tar files not modified in the last 3 months
+    filtered_result = [
+        x for x in result if older_than(TAR_MONTH, x['describe']['modified'])]
+
+    id_results = [
+        (
+            x['id'],
+            x['describe']['folder'],
+            x['describe']['name']) for x in filtered_result]
+
+    dates = [make_datetime_format(
+        d['describe']['modified']) for d in filtered_result]
+
+    # earliest date among the list of tars
+    min_date = min(dates).strftime('%Y-%m-%d')
+    # latest date among the list of tars
+    max_date = max(dates).strftime('%Y-%m-%d')
+
+    post_message_to_slack(
+        'egg-alerts',
+        'tar_notify',
+        data=id_results,
+        day=(min_date, max_date)
+    )
 
 
 def main():
@@ -786,10 +1157,43 @@ def main():
     to_be_archived = archive_pickle['to_be_archived']
     staging52 = archive_pickle['staging_52']
 
-    if to_be_archived or staging52:
-        archiving_function(archive_pickle)
+    today = dt.date.today()
+
+    if today.day in [1, 15]:
+        log.info(today)
+        log.info('Today is archiving run date')
+
+        dx_login()
+
+        if today.day == 1:
+            get_old_tar_and_notify()
+
+        # if there is something in memory
+        # we run archive function
+        # else we find_and_notify
+        if to_be_archived or staging52:
+            archiving_function(archive_pickle, today)
+        else:
+            find_projs_and_notify(archive_pickle, today)
+
     else:
-        find_projs_and_notify(archive_pickle)
+        log.info(today)
+
+        if to_be_archived or staging52:
+            # if there's to-be-archived in memory
+            # we do the countdown to egg-alerts
+            # else we just keep silence
+
+            next_archiving_date = get_next_archiving_date(today)
+            diff = next_archiving_date - today
+
+            post_message_to_slack(
+                'egg-alerts',
+                'countdown',
+                day=(diff.days, next_archiving_date),
+                )
+        else:
+            log.info('There is no data in memory')
 
     log.info('End of script.')
 
