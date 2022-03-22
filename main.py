@@ -1081,6 +1081,12 @@ def get_next_archiving_date(today) -> DateTime:
 
     """
 
+    if today.day not in [1, 15]:
+        pass
+    else:
+        today += dt.timedelta(1)
+
+
     while today.day not in [1, 15]:
         today += dt.timedelta(1)
 
