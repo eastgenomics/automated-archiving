@@ -767,8 +767,31 @@ def find_projs_and_notify(archive_pickle, today) -> None:
         log.info('Processing projects..')
 
         for k, v in old_enough_projects_dict.items():
-            tags = [tag.lower() for tag in v['describe']['tags']]
+
             proj_name = v['describe']['name']
+
+            # check for 'live' status within a project
+            # if 'live' present, there're still files which
+            # are unarchived.
+            # else, all files within the proj have been archived.
+            all_files = list(
+                dx.find_data_objects(
+                    project=k,
+                    describe=True))
+
+            # exclude 'record-123' etc.
+            all_files = [x for x in all_files if 'file' in x['id']]
+
+            # get all files' archivalStatus
+            status = set([x['describe']['archivalState'] for x in all_files])
+
+            if 'live' in status:
+                pass
+            else:
+                log.info(f'ALL ARCHIVED: {k}: {proj_name}')
+                continue
+
+            tags = [tag.lower() for tag in v['describe']['tags']]
             trimmed_id = k.lstrip('project-')
             created_by = v['describe']['createdBy']['user']
 
@@ -1085,7 +1108,6 @@ def get_next_archiving_date(today) -> DateTime:
         pass
     else:
         today += dt.timedelta(1)
-
 
     while today.day not in [1, 15]:
         today += dt.timedelta(1)
