@@ -648,10 +648,7 @@ def archive_skip_function(dir, proj, archive_dict, temp_dict) -> None:
         res = dx.api.project_archive(
             proj, input_params={'folder': dir})
         if res['count'] != 0:
-            archive_dict['archived_52'].append(dir)
-            temp_dict['archived'].append(f'{proj}:{dir}')
-        else:
-            archive_dict['already_archived_52'].append(dir)
+            temp_dict['archived'].append(f'`{proj}` : {dir}')
 
 
 def get_tag_status(proj_52) -> Union[list, list]:
@@ -1019,10 +1016,7 @@ def archiving_function(archive_pickle, today) -> None:
                 log.info(f'ARCHIVING {id}')
                 res = dx.api.project_archive(id)
                 if res['count'] != 0:
-                    archive_pickle['archived'].append(id)
-                    temp_archived['archived'].append(id)
-                else:
-                    archive_pickle['already_archived'].append(id)
+                    temp_archived['archived'].append(f'{proj_name} ({id})')
             else:
                 if older_than(ARCHIVE_MODIFIED_MONTH, modified_epoch):
                     # True if not modified in the last
@@ -1038,10 +1032,8 @@ def archiving_function(archive_pickle, today) -> None:
                     # meaning the script did archive something
                     # in the project
                     if res['count'] != 0:
-                        archive_pickle['archived'].append(id)
-                        temp_archived['archived'].append(id)
-                    else:
-                        archive_pickle['already_archived'].append(id)
+                        temp_archived['archived'].append(
+                            f'{proj_name} (`{id}`)')
                 else:
                     # end up here if proj is not older than
                     # ARCHIVE_MODIFIED_MONTH, meaning
