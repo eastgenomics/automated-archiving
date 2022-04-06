@@ -586,7 +586,7 @@ def get_all_dirs(proj_52) -> list:
     return all_directories
 
 
-def archive_skip_function(dir, proj, archive_dict, temp_dict) -> None:
+def archive_skip_function(dir, proj, temp_dict) -> None:
     """
     Function to archive directories in staging52
 
@@ -602,14 +602,13 @@ def archive_skip_function(dir, proj, archive_dict, temp_dict) -> None:
     Input:
         dir: directory in staging52
         proj: staging52 project id
-        archive_dict: the archive pickle for remembering skipped and
-                        archived files
-        temp_dict: temporary dictionary for slack notification later
+        temp_dict: temporary dictionary for recording what has been archived
 
     Returns:
         None
     """
 
+    # check for 'never-archive' tag in directory
     never_archive = list(dx.find_data_objects(
         project=proj,
         folder=dir,
@@ -634,6 +633,7 @@ def archive_skip_function(dir, proj, archive_dict, temp_dict) -> None:
         log.info(f'RECENTLY MODIFIED: {dir} in staging52')
         return
 
+    # check for 'no-archive' tag in directory
     folders = list(dx.find_data_objects(
         project=proj,
         folder=dir,
@@ -666,16 +666,15 @@ def get_tag_status(proj_52) -> Union[list, list]:
     no_archive_list = []
     never_archive_list = []
 
-    # check no-archive tag in staging52
+    # check no-archive & never-archive tag in staging52
     temp_no_archive = list(
         dx.find_data_objects(
             project=proj_52, tag='no-archive', describe=True))
-    # check never-archive tag in staging52
     temp_never_archive = list(
         dx.find_data_objects(
             project=proj_52, tag='never-archive', describe=True))
 
-    # get the directory name
+    # get the directory pathway
     temp_no_archive = [
         t['describe']['folder'].lstrip('/') for t in temp_no_archive]
     temp_never_archive = [
@@ -977,13 +976,12 @@ def find_projs_and_notify(archive_pickle, today) -> None:
 def archiving_function(archive_pickle, today) -> None:
     """
     Function to check previously listed projs and dirs (memory)
-    and do the archiving.
+    and do the archiving, then run find_proj_and_notify function.
 
-    Skip projs if:
-    1. tagged 'no-archive' or any directory with one file within
-    tagged with 'no-archive'
-    2. modified in the past TAR_MONTH month
-    3. tagged 'never-archive'
+    Skip projs or directories (staging52) if:
+    1. tagged 'no-archive'
+    2. tagged 'never-archive'
+    3. modified in the past ARCHIVE_MODIFIED_MONTH month
 
     """
 
@@ -1011,7 +1009,7 @@ def archiving_function(archive_pickle, today) -> None:
                 log.info(f'SKIPPED: {proj_name}')
                 continue
             elif 'archive' in proj_desc['tags']:
-                # if archive tag in proj
+                # if 'archive' tag in proj
                 # we do archiving
                 log.info(f'ARCHIVING {id}')
                 res = dx.api.project_archive(id)
@@ -1022,15 +1020,14 @@ def archiving_function(archive_pickle, today) -> None:
                     # True if not modified in the last
                     # ARCHIVE_MODIFIED_MONTH month
 
+                    # if res.count = 0, no files are being archived
+                    # which might mean all files are already archived.
+                    # we recognize archived only on res.count != 0
+                    # meaning the script did archive something by itself
+                    # in the project
+
                     log.info(f'ARCHIVING {id}')
                     res = dx.api.project_archive(id)
-                    # if res.count = 0, no files are being archived
-                    # which might mean all files are already archived
-                    # before this script runs on it. So we save it
-                    # into memory (already_archived)
-                    # we recognize archived only on res.count != 0
-                    # meaning the script did archive something
-                    # in the project
                     if res['count'] != 0:
                         temp_archived['archived'].append(
                             f'{proj_name} (`{id}`)')
@@ -1043,8 +1040,7 @@ def archiving_function(archive_pickle, today) -> None:
 
     if list_of_dirs_52:
         for dir in list_of_dirs_52:
-            archive_skip_function(
-                dir, PROJECT_52, archive_pickle, temp_archived)
+            archive_skip_function(dir, PROJECT_52, temp_archived)
 
     # generate archiving txt file
     # ONLY IF THERE IS FILEs BEING ARCHIVED
