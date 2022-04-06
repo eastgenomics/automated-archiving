@@ -6,7 +6,7 @@ which has not been active for the past X months (inactive). It will then
 send a Slack notification to notify the will-be-archived files
 
 The second run of the script will start the archiving process previously
-noted to-be-archive files. It skips files tagged with 'no-archive'
+noted to-be-archive files. It skips files tagged with 'no-archive' / 'never-archive'
 
 """
 
@@ -348,7 +348,8 @@ def older_than(month, modified_epoch) -> bool:
     Determine if a modified epoch date is older than X month
 
     Inputs:
-        X month, proj modified date (epoch)
+        month: X month (int)
+        modified_epoch: proj modified date (epoch)
 
     Returns (Boolean):
         True if haven't been modified in last X month
@@ -371,7 +372,8 @@ def check_dir(dir, month) -> bool:
     for the last X month. If yes, return True.
 
     Inputs:
-        trimmed directory, X month
+        dir: trimmed directory (str),
+        month: X month (int)
 
     Returns:
         Boolean:
@@ -499,12 +501,11 @@ def get_all_old_enough_projs(month2, month3) -> dict:
     which had been archived.
 
     Input:
-        month2: duration of inactivity in the last x month for 002
-        month3: duration of inactivity in the last x month for 003
+        month2: duration of inactivity in the last x month for 002 (int)
+        month3: duration of inactivity in the last x month for 003 (int)
 
     Returns (dict):
-        dictionary of key (proj-id) and
-        value (describe JSON from dxpy for the proj)
+        dict of key (proj-id) and value (describe return from dxpy)
 
     """
 
@@ -600,9 +601,9 @@ def archive_skip_function(dir, proj, temp_dict) -> None:
     If there is no tag in any files, directory will be archived.
 
     Input:
-        dir: directory in staging52
-        proj: staging52 project id
-        temp_dict: temporary dictionary for recording what has been archived
+        dir: directory in staging52 (str)
+        proj: staging52 project id (str)
+        temp_dict: temporary dict for recording what has been archived
 
     Returns:
         None
@@ -983,6 +984,11 @@ def archiving_function(archive_pickle, today) -> None:
     2. tagged 'never-archive'
     3. modified in the past ARCHIVE_MODIFIED_MONTH month
 
+    Inputs:
+        archive_pickle: memory to get files previously flagged
+            for archiving (dict)
+        today: to record today's date (datetime)
+
     """
 
     log.info('Start archiving function')
@@ -1043,7 +1049,7 @@ def archiving_function(archive_pickle, today) -> None:
             archive_skip_function(dir, PROJECT_52, temp_archived)
 
     # generate archiving txt file
-    # ONLY IF THERE IS FILEs BEING ARCHIVED
+    # ONLY IF THERE ARE FILEs BEING ARCHIVED
     if temp_archived:
         if os.path.isfile(ARCHIVED_TXT_PATH):
             with open(ARCHIVED_TXT_PATH, 'a') as f:
@@ -1063,13 +1069,14 @@ def archiving_function(archive_pickle, today) -> None:
             data=temp_archived['archived']
             )
 
-    # empty pickle
-    log.info('Clearing pickle file')
 
+
+    # empty pickle (memory)
+    log.info('Clearing pickle file')
     archive_pickle['to_be_archived'] = []
     archive_pickle['staging_52'] = []
 
-    # save dict
+    # save memory dict
     log.info('Writing into pickle file')
     with open(ARCHIVE_PICKLE_PATH, 'wb') as f:
         pickle.dump(archive_pickle, f)
@@ -1109,7 +1116,7 @@ def make_datetime_format(modified_epoch) -> DateTime:
     into readable datetime format
 
     Input:
-        epoch modified datetime from dnanexus describe
+        epoch modified datetime (from dnanexus describe)
 
     Return:
         datetime
