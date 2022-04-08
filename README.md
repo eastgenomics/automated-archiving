@@ -87,6 +87,10 @@ Projects tagged will bypass archiving indefintely, same goes to any directory wi
 #### archive
 Tagged project or directory will be listed for archiving, regardless of modified date
 
+## Tagging Function
+Script will check each project (002, 003) and add archival status tag. 2 tags used:
+- `fully archived`
+- `partial archived`
 
 ## Output file
 The script will generate a txt file `archived.txt` at the location specified at `AUTOMATED_ARCHIVED_TXT_PATH`. 
@@ -98,9 +102,9 @@ The text file contains all the archived project-id and directories in `staging52
 
 To rebuild image: `docker build -t <image name> .`
 
-Current tested command (local):
+Current docker command (server):
 
-```docker run --env-file <config.txt> -v /var/log:/var/log <image name> ```
+```docker run --env-file <config.txt> -v /var/log/monitoring:/var/log/monitoring:z -v /home/lingj-loc/member:/member <image>```
 
 ## Automation
 A cron job will be set up to run the script on 1st and 15th of each month
