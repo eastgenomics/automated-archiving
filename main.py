@@ -781,7 +781,8 @@ def find_projs_and_notify(archive_pickle, today, status_dict) -> None:
                         classname='file',
                         project=k,
                         describe=True))
-                status = set([x['describe']['archivalState'] for x in all_files])
+                status = set(
+                    [x['describe']['archivalState'] for x in all_files])
 
             if 'live' in status:
                 pass
@@ -972,13 +973,14 @@ def find_projs_and_notify(archive_pickle, today, status_dict) -> None:
 
     log.info('End of finding projs and notify')
 
+
 def tagging_function() -> dict:
     """
     Function to check latest archivalStatus of files
     in a project and add appropriate tag
 
     Output:
-        status_dict: a dict with project-id (key) 
+        status_dict: a dict with project-id (key)
             and (value) achival status of files within the project (set)
 
     """
@@ -988,24 +990,29 @@ def tagging_function() -> dict:
     projects_dict_002, projects_dict_003 = get_all_projs()
     all_proj = {**projects_dict_002, **projects_dict_003}
 
-    for k,v in all_proj.items():
+    for k, v in all_proj.items():
         proj_name = v['describe']['name']
         tags = [tag.lower() for tag in v['describe']['tags']]
 
         status = set()
-        for item in dx.find_data_objects(classname='file', project=k, describe=True):
+        for item in dx.find_data_objects(
+                classname='file',
+                project=k,
+                describe=True):
             status.add(item['describe']['archivalState'])
 
         if 'archived' in status and 'live' in status:
             log.info(f'PARTIAL ARCHIVED {k} {proj_name} {status}')
-            
+
             # check tags and add/remove appropriate tag
             if 'fully archived' in tags:
                 # if 'fully archived' in tags, we do a reset and add 'partial'
                 dx.api.project_remove_tags(
-                    k, input_params={'tags': ['partial archived', 'fully archived']})
+                    k, input_params={
+                        'tags': ['partial archived', 'fully archived']})
                 dx.api.project_add_tags(
-                    k, input_params={'tags': ['partial archived']})
+                    k, input_params={
+                        'tags': ['partial archived']})
             elif 'partial archived' in tags:
                 # if 'fully' not in tags, if 'partial' is present
                 # this proj is correctly tagged. We continue.
@@ -1014,7 +1021,7 @@ def tagging_function() -> dict:
                 # both 'fully' and 'partial' are not present
                 dx.api.project_add_tags(
                     k, input_params={'tags': ['partial archived']})
-            
+
             # save this project file status into a dictionary for later use
             status_dict[k] = status
         elif 'live' not in status:
@@ -1022,7 +1029,8 @@ def tagging_function() -> dict:
 
             if 'partial archived' in tags:
                 dx.api.project_remove_tags(
-                    k, input_params={'tags': ['partial archived', 'fully archived']})
+                    k, input_params={'tags': [
+                        'partial archived', 'fully archived']})
                 dx.api.project_add_tags(
                     k, input_params={'tags': ['fully archived']})
             elif 'fully archived' in tags:
@@ -1036,8 +1044,9 @@ def tagging_function() -> dict:
             # if all live files, don't touch the project
             log.info(f'ALL LIVE {k} {proj_name} {status}')
             continue
-    
+
     return status_dict
+
 
 def archiving_function(archive_pickle, today) -> None:
     """
