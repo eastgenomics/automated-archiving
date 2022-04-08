@@ -6,7 +6,8 @@ which has not been active for the past X months (inactive). It will then
 send a Slack notification to notify the will-be-archived files
 
 The second run of the script will start the archiving process previously
-noted to-be-archive files. It skips files tagged with 'no-archive' / 'never-archive'
+noted to-be-archive files.
+It skips files tagged with 'no-archive' / 'never-archive'
 
 """
 
@@ -717,7 +718,7 @@ def get_tag_status(proj_52) -> Union[list, list]:
     return no_archive_list, never_archive_list
 
 
-def find_projs_and_notify(archive_pickle, today) -> None:
+def find_projs_and_notify(archive_pickle, today, status_dict) -> None:
     """
     Function to find projs or directories in staging52
     which has not been modified in the last X months (inactive)
@@ -771,16 +772,16 @@ def find_projs_and_notify(archive_pickle, today) -> None:
             # if 'live' present, there're still files which
             # are unarchived.
             # else, all files within the proj have been archived.
-            all_files = list(
-                dx.find_data_objects(
-                    project=k,
-                    describe=True))
-
-            # exclude 'record-123' etc.
-            all_files = [x for x in all_files if 'file' in x['id']]
-
-            # get all files' archivalStatus
-            status = set([x['describe']['archivalState'] for x in all_files])
+            if k in status_dict.keys():
+                status = status_dict[k]
+            else:
+                # get all files' archivalStatus
+                all_files = list(
+                    dx.find_data_objects(
+                        classname='file',
+                        project=k,
+                        describe=True))
+                status = set([x['describe']['archivalState'] for x in all_files])
 
             if 'live' in status:
                 pass
@@ -839,12 +840,10 @@ def find_projs_and_notify(archive_pickle, today) -> None:
 
             all_files = list(
                 dx.find_data_objects(
+                    classname='file',
                     project=PROJECT_52,
                     folder=original_dir,
                     describe=True))
-
-            # exclude 'record-123' etc.
-            all_files = [x for x in all_files if 'file' in x['id']]
 
             # get all files' archivalStatus
             status = set([x['describe']['archivalState'] for x in all_files])
@@ -973,6 +972,72 @@ def find_projs_and_notify(archive_pickle, today) -> None:
 
     log.info('End of finding projs and notify')
 
+def tagging_function() -> dict:
+    """
+    Function to check latest archivalStatus of files
+    in a project and add appropriate tag
+
+    Output:
+        status_dict: a dict with project-id (key) 
+            and (value) achival status of files within the project (set)
+
+    """
+
+    status_dict = {}
+
+    projects_dict_002, projects_dict_003 = get_all_projs()
+    all_proj = {**projects_dict_002, **projects_dict_003}
+
+    for k,v in all_proj.items():
+        proj_name = v['describe']['name']
+        tags = [tag.lower() for tag in v['describe']['tags']]
+
+        status = set()
+        for item in dx.find_data_objects(classname='file', project=k, describe=True):
+            status.add(item['describe']['archivalState'])
+
+        if 'archived' in status and 'live' in status:
+            log.info(f'PARTIAL ARCHIVED {k} {proj_name} {status}')
+            
+            # check tags and add/remove appropriate tag
+            if 'fully archived' in tags:
+                # if 'fully archived' in tags, we do a reset and add 'partial'
+                dx.api.project_remove_tags(
+                    k, input_params={'tags': ['partial archived', 'fully archived']})
+                dx.api.project_add_tags(
+                    k, input_params={'tags': ['partial archived']})
+            elif 'partial archived' in tags:
+                # if 'fully' not in tags, if 'partial' is present
+                # this proj is correctly tagged. We continue.
+                continue
+            else:
+                # both 'fully' and 'partial' are not present
+                dx.api.project_add_tags(
+                    k, input_params={'tags': ['partial archived']})
+            
+            # save this project file status into a dictionary for later use
+            status_dict[k] = status
+        elif 'live' not in status:
+            log.info(f'ALL ARCHIVED {k} {proj_name} {status}')
+
+            if 'partial archived' in tags:
+                dx.api.project_remove_tags(
+                    k, input_params={'tags': ['partial archived', 'fully archived']})
+                dx.api.project_add_tags(
+                    k, input_params={'tags': ['fully archived']})
+            elif 'fully archived' in tags:
+                continue
+            else:
+                dx.api.project_add_tags(
+                    k, input_params={'tags': ['fully archived']})
+
+            status_dict[k] = status
+        else:
+            # if all live files, don't touch the project
+            log.info(f'ALL LIVE {k} {proj_name} {status}')
+            continue
+    
+    return status_dict
 
 def archiving_function(archive_pickle, today) -> None:
     """
@@ -1069,7 +1134,8 @@ def archiving_function(archive_pickle, today) -> None:
             data=temp_archived['archived']
             )
 
-
+    # do tagging for fully and partially archived projects
+    status_dict = tagging_function()
 
     # empty pickle (memory)
     log.info('Clearing pickle file')
@@ -1083,7 +1149,7 @@ def archiving_function(archive_pickle, today) -> None:
 
     log.info('End of archiving function')
 
-    find_projs_and_notify(archive_pickle, today)
+    find_projs_and_notify(archive_pickle, today, status_dict)
 
 
 def get_next_archiving_date(today) -> DateTime:
@@ -1197,7 +1263,7 @@ def main():
         if to_be_archived or staging52:
             archiving_function(archive_pickle, today)
         else:
-            find_projs_and_notify(archive_pickle, today)
+            find_projs_and_notify(archive_pickle, today, {})
 
     else:
         log.info(today)
