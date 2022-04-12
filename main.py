@@ -990,7 +990,38 @@ def tagging_function() -> dict:
     projects_dict_002, projects_dict_003 = get_all_projs()
     all_proj = {**projects_dict_002, **projects_dict_003}
 
-    for k, v in all_proj.items():
+    # separate out those with archivedDataUsage == dataUsage
+    # which are fully archived so we don't have to query them
+    archived_proj = {
+        k: v for k, v in all_proj.items() if
+        v['describe']['archivedDataUsage'] == v['describe']['dataUsage']}
+
+    for k, v in archived_proj.items():
+        proj_name = v['describe']['name']
+        tags = [tag.lower() for tag in v['describe']['tags']]
+
+        log.info(f'ALL ARCHIVED {k} {proj_name}')
+
+        if 'partial archived' in tags:
+            dx.api.project_remove_tags(
+                k, input_params={'tags': [
+                    'partial archived', 'fully archived']})
+            dx.api.project_add_tags(
+                k, input_params={'tags': ['fully archived']})
+        elif 'fully archived' in tags:
+            continue
+        else:
+            dx.api.project_add_tags(
+                k, input_params={'tags': ['fully archived']})
+
+        status_dict[k] = status
+
+    # whatever is leftover from above projects, we do the query
+    # they can be 'live' or 'partially archived'
+    unsure_projects = {
+        k: v for k, v in all_proj.items() if k not in archived_proj.keys()}
+
+    for k, v in unsure_projects.items():
         proj_name = v['describe']['name']
         tags = [tag.lower() for tag in v['describe']['tags']]
 
