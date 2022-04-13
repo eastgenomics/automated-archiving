@@ -1014,8 +1014,6 @@ def tagging_function() -> dict:
             dx.api.project_add_tags(
                 k, input_params={'tags': ['fully archived']})
 
-        status_dict[k] = status
-
     # whatever is leftover from above projects, we do the query
     # they can be 'live' or 'partially archived'
     unsure_projects = {
