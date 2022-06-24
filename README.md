@@ -51,6 +51,7 @@ A config file (txt) with variables:
 - `RECEIVERS`: (for sending helpdesk email) emails separated by comma (e.g. abc.domain,bbc.domain)
 - `TAR_MONTH`: Period of tar.gz being inactive to be considered 'old enough' (only used by `get_old_tar_and_notify` function)
 - `ARCHIVE_MODIFIED_MONTH`: During archiving_function, if file if modified in the last `ARCHIVE_MODIFIED_MONTH` month, we skip archiving it
+- `DEBUG`: TRUE / FALSE (str) comment out actionable codes (e.g. tag file, remove file tag, archive) if TRUE
 
 ## Logging
 The main logging script is `helper.py`
