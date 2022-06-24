@@ -35,7 +35,7 @@ logger = get_logger("main-log")
 try:
     logger.info('Reading env variables')
 
-    DEBUG = os.environ['DEBUG']
+    ARCHIVE_DEBUG = os.environ['ARCHIVE_DEBUG']
 
     SLACK_TOKEN = os.environ['SLACK_TOKEN']
     DNANEXUS_TOKEN = os.environ['DNANEXUS_TOKEN']
@@ -64,7 +64,7 @@ slack = Slack(
     SLACK_TOKEN,
     RECEIVERS,
     TAR_MONTH,
-    DEBUG,
+    ARCHIVE_DEBUG,
     SENDER,
     SERVER,
     PORT
@@ -352,8 +352,8 @@ def archive_skip_function(dir: str, proj: str, temp_dict: dict) -> None:
     If there is no tag in any files, directory will be archived.
 
     Input:
-        dir: directory in staging52 (str)
-        proj: staging52 project id (str)
+        dir: directory in staging52
+        proj: staging52 project id
         temp_dict: temporary dict for recording what has been archived
 
     Returns:
@@ -396,7 +396,7 @@ def archive_skip_function(dir: str, proj: str, temp_dict: dict) -> None:
         logger.info(f'SKIPPED: {dir} in staging52')
         return
     else:
-        if DEBUG == 'FALSE':
+        if ARCHIVE_DEBUG == 'FALSE':
             logger.info(f'ARCHIVING staging52: {dir}')
             res = dx.api.project_archive(
                 proj, input_params={'folder': dir})
@@ -422,10 +422,10 @@ def get_tag_status(proj_52: str) -> Union[list, list]:
     # check no-archive & never-archive tag in staging52
     temp_no_archive = list(
         dx.find_data_objects(
-            project=proj_52, tag='no-archive', describe=True))
+            project=proj_52, tag=['no-archive'], describe=True))
     temp_never_archive = list(
         dx.find_data_objects(
-            project=proj_52, tag='never-archive', describe=True))
+            project=proj_52, tag=['never-archive'], describe=True))
 
     # get the directory pathway
     temp_no_archive = [
@@ -524,42 +524,40 @@ def find_projs_and_notify(
 
             proj_name = v['describe']['name']
 
-            # check for 'live' status within a project
-            # if 'live' present, there're still files which
-            # are unarchived.
-            # else, all files within the proj have been archived.
             if k in status_dict.keys():
                 status = status_dict[k]
             else:
-                # get all files' archivalStatus
+                # get all files' archivalStatus in the proj
                 all_files = list(
                     dx.find_data_objects(
                         classname='file',
                         project=k,
-                        describe=True))
+                        describe={'fields': {'archivalState': True}}))
                 status = set(
                     [x['describe']['archivalState'] for x in all_files])
 
             if 'live' in status:
+                # there is something to be archived
                 pass
             else:
+                # everything has been archived
                 logger.info(f'ALL ARCHIVED: {k}: {proj_name}')
                 continue
 
+            # get proj tag status
             tags = [tag.lower() for tag in v['describe']['tags']]
             trimmed_id = k.lstrip('project-')
             created_by = v['describe']['createdBy']['user']
 
-            # if 'never-archive', move on
-            # if 'no-archive', remove and put it in
-            # to-be-archived list & special notify
-            # for Slack notification
-
             if 'never-archive' in tags:
+                # proj tagged 'never-archive'
                 logger.info(f'NEVER_ARCHIVE: {k}')
                 continue
             elif 'no-archive' in tags:
-                if DEBUG == 'FALSE':
+                if ARCHIVE_DEBUG == 'FALSE':
+                    # proj is old enough + have 'no-archive' tag
+                    # thus, we remove the tag and
+                    # list it in special_notify list
                     remove_proj_tag(k)
 
                 special_notify_list.append(proj_name)
@@ -574,7 +572,7 @@ def find_projs_and_notify(
                         'link': f'<{URL_PREFIX}/{trimmed_id}/|{proj_name}>'
                     })
             else:
-                # all tagged 'archive' + the rest will end up here
+                # proj tagged 'archive' & others will end up here
                 archive_pickle['to_be_archived'].append(k)
                 if proj_name.startswith('002'):
                     to_be_archived_list['002'].append(
@@ -601,7 +599,7 @@ def find_projs_and_notify(
                     classname='file',
                     project=PROJECT_52,
                     folder=original_dir,
-                    describe=True))
+                    describe={'fields': {'archivalState': True}}))
 
             # get all files' archivalStatus
             status = set([x['describe']['archivalState'] for x in all_files])
@@ -652,7 +650,7 @@ def find_projs_and_notify(
                             f'REMOVE_TAG: removing tag \
                                 for {len(files)} file(s)')
 
-                        if DEBUG == 'FALSE':
+                        if ARCHIVE_DEBUG == 'FALSE':
                             for file in files:
                                 dx.api.file_remove_tags(
                                     file['id'],
@@ -707,7 +705,6 @@ def find_projs_and_notify(
           ('never_archive', never_archive_list)
         ]
 
-    # send slack notification if there's old-enough dir / projs
     next_archiving_date = get_next_archiving_date(today)
 
     for purpose, data in big_list:
@@ -787,7 +784,7 @@ def tagging_function() -> dict:
         for item in dx.find_data_objects(
                 classname='file',
                 project=k,
-                describe=True):
+                describe={'fields': {'archivalState': True}}):
             status.add(item['describe']['archivalState'])
 
         if 'archived' in status and 'live' in status:
@@ -837,10 +834,7 @@ def tagging_function() -> dict:
     return status_dict
 
 
-def archiving_function(
-    archive_pickle: dict,
-    today: DateTime
-        ) -> None:
+def archiving_function(archive_pickle: dict, today: DateTime) -> None:
     """
     Function to check previously listed projs and dirs (memory)
     and do the archiving, then run find_proj_and_notify function.
@@ -881,25 +875,16 @@ def archiving_function(
                 logger.info(f'SKIPPED: {proj_name}')
                 continue
             elif 'archive' in proj_desc['tags']:
-                # if 'archive' tag in proj
-                # we do archiving
-                if DEBUG == 'FALSE':
+                if ARCHIVE_DEBUG == 'FALSE':
                     logger.info(f'ARCHIVING {id}')
                     res = dx.api.project_archive(id)
                     if res['count'] != 0:
                         temp_archived['archived'].append(f'{proj_name} ({id})')
             else:
                 if older_than(ARCHIVE_MODIFIED_MONTH, modified_epoch):
-                    # True if not modified in the last
-                    # ARCHIVE_MODIFIED_MONTH month
+                    # True if not modified in the last X month
 
-                    # if res.count = 0, no files are being archived
-                    # which might mean all files are already archived.
-                    # we recognize archived only on res.count != 0
-                    # meaning the script did archive something by itself
-                    # in the project
-
-                    if DEBUG == 'FALSE':
+                    if ARCHIVE_DEBUG == 'FALSE':
                         logger.info(f'ARCHIVING {id}')
                         res = dx.api.project_archive(id)
                         if res['count'] != 0:
@@ -939,7 +924,7 @@ def archiving_function(
             )
 
     # do tagging for fully and partially archived projects
-    if DEBUG == 'FALSE':
+    if ARCHIVE_DEBUG == 'FALSE':
         status_dict = tagging_function()
     else:
         status_dict = {}
@@ -1018,7 +1003,11 @@ def get_old_tar_and_notify(today) -> None:
         dx.find_data_objects(
             name='^run.*.tar.gz',
             name_mode='regexp',
-            describe=True,
+            describe={
+                'fields': {
+                    'modified': True,
+                    'folder': True,
+                    'name': True}},
             project=PROJECT_52))
 
     # list of tar files not modified in the last 3 months
