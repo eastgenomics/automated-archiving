@@ -8,6 +8,6 @@ COPY requirements.txt requirements.txt
 
 RUN pip install -r requirements.txt
 
-COPY main.py helper.py /
+COPY main.py helper.py notify.py /
 
 CMD [ "python", "main.py"]
