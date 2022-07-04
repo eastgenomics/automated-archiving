@@ -988,6 +988,10 @@ def archiving_function(archive_pickle: dict, today: DateTime) -> None:
 
                     big_exclude_list = set()
 
+                    # loop through each word regex in ENV
+                    # find_data_object based on the word regex
+                    # compile that into a big_exclude_list
+
                     for word in AUTOMATED_REGEX_EXCLUDE:
                         exclude_list = [
                             file['id'] for file in list(
@@ -997,6 +1001,12 @@ def archiving_function(archive_pickle: dict, today: DateTime) -> None:
                                     project=proj_id
                                     ))]
                         big_exclude_list.update(exclude_list)
+
+                    # if there're files fitting the exclude regex
+                    # we get all_files, exclude those in big_exclude_list
+                    # then archive each file
+                    # if no files fitting exclude regex
+                    # we archive the whole project as usual
 
                     if big_exclude_list:
                         all_files = [
