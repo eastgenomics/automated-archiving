@@ -46,7 +46,7 @@ The `.py` file should have a `MEMBER_LIST` (dict) which contain key `DNANexus Us
 - `AUTOMATED_ARCHIVED_TXT_PATH` : directory to output txt file listing all archived projects & directories
 - `TAR_MONTH`: Period of tar.gz being inactive to be considered 'old enough' (only used by `get_old_tar_and_notify` function)
 - `ARCHIVE_MODIFIED_MONTH`: During archiving_function, if file if modified in the last `ARCHIVE_MODIFIED_MONTH` month, we skip archiving it
-- `ARCHIVE_DEBUG`: TRUE / FALSE (str) if TRUE, comment out actionable codes (e.g. tag file, remove file tag, archive)
+- `ARCHIVE_DEBUG`: (exist or comment out) if TRUE, comment out actionable codes (e.g. tag file, remove file tag, archive)
 - `AUTOMATED_REGEX_EXCLUDE`: comma-separated regex word e.g. megaqc.json,some-filename\..*,^megapc.csv
 #### slack
 - `SLACK_TOKEN` : Slack Bot API Token
