@@ -152,7 +152,7 @@ class Slack():
         strtoday = today.strftime("%d/%m/%Y")
         message = self.fetch_messages(purpose, strtoday, day, error)
 
-        if self.debug == 'False':
+        if not self.debug:
             pass
         else:
             channel = 'egg-test'

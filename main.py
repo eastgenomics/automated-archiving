@@ -36,8 +36,8 @@ logger = get_logger("main-log")
 try:
     logger.info('Reading env variables')
 
-    DEBUG = os.environ['ARCHIVE_DEBUG']
-    if DEBUG == 'TRUE':
+    DEBUG = os.environ.get('ARCHIVE_DEBUG', False)
+    if DEBUG:
         logger.info('Running in DEBUG mode')
     else:
         logger.info('Running in PRODUCTION mode')
@@ -455,7 +455,7 @@ def directory_archive(
 
             logger.info(f'ARCHIVING EXCLUDE staging52: {dir_path}')
 
-            if DEBUG == 'FALSE':
+            if not DEBUG:
                 for id in excluded_list:
                     logger.info(f'ARCHIVING staging52: {id}')
                     dx.DXFile(id, project=proj_id).archive()
@@ -464,7 +464,7 @@ def directory_archive(
             # if there's thing in directory to be excluded
             # else we do an overall project.archive()
             logger.info(f'ARCHIVING staging52: {dir_path}')
-            if DEBUG == 'FALSE':
+            if not DEBUG:
                 res = dx.api.project_archive(
                     proj_id,
                     input_params={'folder': dir_path}
@@ -627,7 +627,7 @@ def find_projs_and_notify(
                 logger.info(f'NEVER ARCHIVE: {proj_id}')
                 continue
             elif 'no-archive' in tags:
-                if DEBUG == 'FALSE':
+                if not DEBUG:
                     # proj is old enough + have 'no-archive' tag
                     # thus, we remove the tag and
                     # list it in special_notify list
@@ -722,7 +722,7 @@ def find_projs_and_notify(
                             f'REMOVE_TAG: removing tag \
                                 for {len(no_archive)} file(s)')
 
-                        if DEBUG == 'FALSE':
+                        if not DEBUG:
                             for file in no_archive:
                                 dx.api.file_remove_tags(
                                     file['id'],
@@ -969,7 +969,7 @@ def archiving_function(archive_pickle: dict, today: DateTime) -> None:
                         file_id not in big_exclude_list]
 
                     logger.info(f'ARCHIVING EXCLUDE: {proj_id}')
-                    if DEBUG == 'FALSE':
+                    if not DEBUG:
                         for file_id in excluded_list:
                             logger.info(f'ARCHIVING: {file_id}')
                             dx.DXFile(file_id, project=proj_id).archive()
@@ -977,7 +977,7 @@ def archiving_function(archive_pickle: dict, today: DateTime) -> None:
                             f'{proj_name} ({proj_id})')
                 else:
                     logger.info(f'ARCHIVING {proj_id}')
-                    if DEBUG == 'FALSE':
+                    if not DEBUG:
                         res = dx.api.project_archive(proj_id)
                         if res['count'] != 0:
                             temp_archived['archived'].append(
@@ -1018,7 +1018,7 @@ def archiving_function(archive_pickle: dict, today: DateTime) -> None:
                             file_id not in big_exclude_list]
 
                         logger.info(f'ARCHIVING EXCLUDE: {proj_id}')
-                        if DEBUG == 'FALSE':
+                        if not DEBUG:
                             for file_id in excluded_list:
                                 logger.info(f'ARCHIVING: {file_id}')
                                 dx.DXFile(file_id, project=proj_id).archive()
@@ -1026,7 +1026,7 @@ def archiving_function(archive_pickle: dict, today: DateTime) -> None:
                                 f'{proj_name} ({proj_id})')
                     else:
                         logger.info(f'ARCHIVING {proj_id}')
-                        if DEBUG == 'FALSE':
+                        if not DEBUG:
                             res = dx.api.project_archive(proj_id)
                             if res['count'] != 0:
                                 temp_archived['archived'].append(
@@ -1065,7 +1065,7 @@ def archiving_function(archive_pickle: dict, today: DateTime) -> None:
             )
 
     # do tagging for fully and partially archived projects
-    if DEBUG == 'FALSE':
+    if not DEBUG:
         status_dict = tagging_function()
     else:
         status_dict = {}
