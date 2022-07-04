@@ -16,7 +16,7 @@ This acts as the memory of the script to remember to-be-archived projects and fi
 ## Member
 The script requires `members.py` in `member` folder on the server. 
 
-The `.py` file should have a `MEMBER_LIST` which contain key `DNANexus Username` - value `Slack Username`
+The `.py` file should have a `MEMBER_LIST` (dict) which contain key `DNANexus Username` - value `Slack Username`
 
 ## Script Workflow
 1. Check today's date.
@@ -35,22 +35,26 @@ The `.py` file should have a `MEMBER_LIST` which contain key `DNANexus Username`
 #### tar.gz Slack Notification
 ![tar notification](demo/tar_files_demo.png)
 
-## Configs required
-A config file (txt) with variables:
+## Environment Variables Required
+#### dnanexus
 - `DNANEXUS_TOKEN` : DNANexus API Token
-- `SLACK_TOKEN` : Slack Bot API Token
 - `PROJECT_52` : staging52 project-id
 - `PROJECT_53` : staging53 project-id
 - `AUTOMATED_MONTH_002` : Period of file being inactive after which to archive (months) for 002 projects & generally
 - `AUTOMATED_MONTH_003` : Period of file being inactive after which to archive (months) for 003 projects
 - `AUTOMATED_ARCHIVE_PICKLE_PATH` : pickle file directory
 - `AUTOMATED_ARCHIVED_TXT_PATH` : directory to output txt file listing all archived projects & directories
+- `TAR_MONTH`: Period of tar.gz being inactive to be considered 'old enough' (only used by `get_old_tar_and_notify` function)
+- `ARCHIVE_MODIFIED_MONTH`: During archiving_function, if file if modified in the last `ARCHIVE_MODIFIED_MONTH` month, we skip archiving it
+- `ARCHIVE_DEBUG`: (exist or comment out) if TRUE, comment out actionable codes (e.g. tag file, remove file tag, archive)
+- `AUTOMATED_REGEX_EXCLUDE`: comma-separated regex word e.g. megaqc.json,some-filename\..*,^megapc.csv
+#### slack
+- `SLACK_TOKEN` : Slack Bot API Token
+#### server
 - `ANSIBLE_SERVER`: (for sending helpdesk email) server host
 - `ANSIBLE_PORT`: (for sending helpdesk email) server port
 - `SENDER`: (for sending helpdesk email) BioinformaticsTeamGeneticsLab@addenbrookes.nhs.uk
 - `RECEIVERS`: (for sending helpdesk email) emails separated by comma (e.g. abc.domain,bbc.domain)
-- `TAR_MONTH`: Period of tar.gz being inactive to be considered 'old enough' (only used by `get_old_tar_and_notify` function)
-- `ARCHIVE_MODIFIED_MONTH`: During archiving_function, if file if modified in the last `ARCHIVE_MODIFIED_MONTH` month, we skip archiving it
 
 ## Logging
 The main logging script is `helper.py`
@@ -93,7 +97,7 @@ To rebuild image: `docker build -t <image name> .`
 
 Current docker command (server):
 
-```docker run --env-file <config.txt> -v /var/log/monitoring:/var/log/monitoring:z -v /home/lingj-loc/member:/member <image>```
+```docker run --env-file <config.file> -v /var/log/monitoring:/var/log/monitoring:z -v /home/lingj-loc/member:/member <image>```
 
 ## Automation
 A cron job will be set up to run the script on 1st and 15th of each month
