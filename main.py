@@ -1187,7 +1187,6 @@ if __name__ == "__main__":
     staging52 = archive_pickle['staging_52']
 
     today = dt.date.today()
-    today -= timedelta(4)
     logger.info(today)
 
     if today.day in [1, 15]:
