@@ -831,17 +831,19 @@ def tagging_function() -> dict:
 
         logger.info(f'ALL ARCHIVED {k} {proj_name}')
 
-        if 'partial archived' in tags:
-            dx.api.project_remove_tags(
-                k, input_params={'tags': [
-                    'partial archived', 'fully archived']})
-            dx.api.project_add_tags(
-                k, input_params={'tags': ['fully archived']})
-        elif 'fully archived' in tags:
-            continue
-        else:
-            dx.api.project_add_tags(
-                k, input_params={'tags': ['fully archived']})
+        if not DEBUG:
+
+            if 'partial archived' in tags:
+                dx.api.project_remove_tags(
+                    k, input_params={'tags': [
+                        'partial archived', 'fully archived']})
+                dx.api.project_add_tags(
+                    k, input_params={'tags': ['fully archived']})
+            elif 'fully archived' in tags:
+                continue
+            else:
+                dx.api.project_add_tags(
+                    k, input_params={'tags': ['fully archived']})
 
     # whatever is leftover from above projects, we do the query
     # they can be 'live' or 'partially archived'
@@ -862,40 +864,43 @@ def tagging_function() -> dict:
         if 'archived' in status and 'live' in status:
             logger.info(f'PARTIAL ARCHIVED {k} {proj_name} {status}')
 
-            # check tags and add/remove appropriate tag
-            if 'fully archived' in tags:
-                # if 'fully archived' in tags, we do a reset and add 'partial'
-                dx.api.project_remove_tags(
-                    k, input_params={
-                        'tags': ['partial archived', 'fully archived']})
-                dx.api.project_add_tags(
-                    k, input_params={
-                        'tags': ['partial archived']})
-            elif 'partial archived' in tags:
-                # if 'fully' not in tags, if 'partial' is present
-                # this proj is correctly tagged. We continue.
-                continue
-            else:
-                # both 'fully' and 'partial' are not present
-                dx.api.project_add_tags(
-                    k, input_params={'tags': ['partial archived']})
+            if not DEBUG:
+                # check tags and add/remove appropriate tag
+                if 'fully archived' in tags:
+                    # if 'fully archived' in tags
+                    # we do a reset and add 'partial'
+                    dx.api.project_remove_tags(
+                        k, input_params={
+                            'tags': ['partial archived', 'fully archived']})
+                    dx.api.project_add_tags(
+                        k, input_params={
+                            'tags': ['partial archived']})
+                elif 'partial archived' in tags:
+                    # if 'fully' not in tags, if 'partial' is present
+                    # this proj is correctly tagged. We continue.
+                    continue
+                else:
+                    # both 'fully' and 'partial' are not present
+                    dx.api.project_add_tags(
+                        k, input_params={'tags': ['partial archived']})
 
             # save this project file status into a dictionary for later use
             status_dict[k] = status
         elif 'live' not in status:
             logger.info(f'ALL ARCHIVED {k} {proj_name} {status}')
 
-            if 'partial archived' in tags:
-                dx.api.project_remove_tags(
-                    k, input_params={'tags': [
-                        'partial archived', 'fully archived']})
-                dx.api.project_add_tags(
-                    k, input_params={'tags': ['fully archived']})
-            elif 'fully archived' in tags:
-                continue
-            else:
-                dx.api.project_add_tags(
-                    k, input_params={'tags': ['fully archived']})
+            if not DEBUG:
+                if 'partial archived' in tags:
+                    dx.api.project_remove_tags(
+                        k, input_params={'tags': [
+                            'partial archived', 'fully archived']})
+                    dx.api.project_add_tags(
+                        k, input_params={'tags': ['fully archived']})
+                elif 'fully archived' in tags:
+                    continue
+                else:
+                    dx.api.project_add_tags(
+                        k, input_params={'tags': ['fully archived']})
 
             status_dict[k] = status
         else:
@@ -1065,10 +1070,7 @@ def archiving_function(archive_pickle: dict, today: DateTime) -> None:
             )
 
     # do tagging for fully and partially archived projects
-    if not DEBUG:
-        status_dict = tagging_function()
-    else:
-        status_dict = {}
+    status_dict = tagging_function()
 
     # empty pickle (memory)
     logger.info('Clearing pickle file')
@@ -1185,6 +1187,7 @@ if __name__ == "__main__":
     staging52 = archive_pickle['staging_52']
 
     today = dt.date.today()
+    today -= timedelta(4)
     logger.info(today)
 
     if today.day in [1, 15]:
