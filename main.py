@@ -55,7 +55,8 @@ try:
     ARCHIVED_TXT_PATH = os.environ['AUTOMATED_ARCHIVED_TXT_PATH']
     URL_PREFIX = 'https://platform.dnanexus.com/panx/projects'
     AUTOMATED_REGEX_EXCLUDE = [
-        text.strip() for text in os.environ['AUTOMATED_REGEX_EXCLUDE'].split()]
+        text.strip() for text in
+        os.environ['AUTOMATED_REGEX_EXCLUDE'].split(',')]
 
     SERVER = os.environ['ANSIBLE_SERVER']
     PORT = os.environ['ANSIBLE_PORT']
@@ -1023,6 +1024,8 @@ def archiving_function(archive_pickle: dict, today: DateTime) -> None:
                             file_id not in big_exclude_list]
 
                         logger.info(f'ARCHIVING EXCLUDE: {proj_id}')
+                        logger.info(
+                            f'Excluding these files: {big_exclude_list}')
                         if not DEBUG:
                             for file_id in excluded_list:
                                 logger.info(f'ARCHIVING: {file_id}')
