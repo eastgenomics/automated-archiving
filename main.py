@@ -984,7 +984,8 @@ def archiving_function(archive_pickle: dict, today: DateTime) -> None:
                 else:
                     logger.info(f'ARCHIVING {proj_id}')
                     if not DEBUG:
-                        res = dx.api.project_archive(proj_id)
+                        res = dx.api.project_archive(
+                            proj_id, input_params={'folder': '/'})
                         if res['count'] != 0:
                             temp_archived['archived'].append(
                                 f'{proj_name} ({proj_id})')
@@ -1035,7 +1036,8 @@ def archiving_function(archive_pickle: dict, today: DateTime) -> None:
                     else:
                         logger.info(f'ARCHIVING {proj_id}')
                         if not DEBUG:
-                            res = dx.api.project_archive(proj_id)
+                            res = dx.api.project_archive(
+                                proj_id, input_params={'folder': '/'})
                             if res['count'] != 0:
                                 temp_archived['archived'].append(
                                     f'{proj_name} (`{proj_id}`)')
