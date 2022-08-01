@@ -796,9 +796,12 @@ def find_projs_and_notify(
 
     # save dict (only if there's to-be-archived)
     if proj002 or proj003 or folders52:
-        logger.info('Writing into pickle file')
-        with open(ARCHIVE_PICKLE_PATH, 'wb') as f:
-            pickle.dump(archive_pickle, f)
+        if DEBUG:
+            logger.info('Running in DEBUG mode, not writing into pickle file')
+        else:
+            logger.info('Writing into pickle file')
+            with open(ARCHIVE_PICKLE_PATH, 'wb') as f:
+                pickle.dump(archive_pickle, f)
 
     logger.info('End of finding projs and notify')
 
