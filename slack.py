@@ -1,29 +1,22 @@
-from http import server
 from xmlrpc.client import DateTime
 import requests
-import smtplib
 import json
 import sys
 import datetime as dt
 from requests.adapters import HTTPAdapter
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 from urllib3.util import Retry
-from email.utils import COMMASPACE, formatdate
+
+
 from helper import get_logger
 
 logger = get_logger("main log")
 
 
-class Slack():
-    def __init__(self, token, receivers, months, debug, sender, server, port):
+class SlackClass():
+    def __init__(self, token, months, debug):
         self.token = token
-        self.receivers = receivers
         self.months = months
         self.debug = debug
-        self.sender = sender
-        self.server = server
-        self.port = port
 
     def fetch_messages(
         self,
@@ -140,13 +133,6 @@ class Slack():
         retries = Retry(total=5, backoff_factor=10, method_whitelist=['POST'])
         http.mount("https://", HTTPAdapter(max_retries=retries))
 
-        if not self.debug:
-            receiver_list = self.receivers
-            if ',' in receiver_list:
-                receivers = receiver_list.split(',')
-            else:
-                receivers = [receiver_list]
-
         logger.info(f'Posting data for: {purpose}')
 
         strtoday = today.strftime("%d/%m/%Y")
@@ -254,65 +240,11 @@ class Slack():
                 logger.error(f'Slack API error to #{channel}')
                 logger.error(f'Error Code From Slack: {error_code}')
 
-                if not self.debug:
-                    self.send_mail(
-                        self.sender,
-                        receivers,
-                        'Automated Archiving Slack API Token Error',
-                        'Error with Automated Archiving Slack API Token'
-                        )
-                logger.info('End of script')
-                sys.exit()
+                sys.exit('End of script')
 
         except Exception as e:
             # endpoint request fail from server
             logger.error(f'Error sending POST request to channel #{channel}')
             logger.error(e)
 
-            if not self.debug:
-                self.send_mail(
-                    self.sender,
-                    receivers,
-                    'Automated Archiving Slack Post Failed (Server Error)',
-                    'Error with Automated Archiving post request to Slack'
-                    )
-            logger.info('End of script')
-            sys.exit()
-
-    def send_mail(
-        self,
-        send_from: str,
-        send_to: list,
-        subject: str,
-        text: str
-            ) -> None:
-        """
-        Function to send email to helpdesk
-
-        Inputs:
-            send_from: BioinformaticsTeamGeneticsLab@addenbrookes.nhs.uk
-            send_to: list of emails
-            subject: message subject
-            text: message body
-
-        Return:
-            None
-        """
-        assert isinstance(send_to, list)
-
-        msg = MIMEMultipart()
-        msg['From'] = send_from
-        msg['To'] = COMMASPACE.join(send_to)
-        msg['Date'] = formatdate(localtime=True)
-        msg['Subject'] = subject
-
-        msg.attach(MIMEText(text))
-
-        try:
-            smtp = smtplib.SMTP(self.server, self.port)
-            smtp.sendmail(send_from, send_to, msg.as_string())
-            smtp.close()
-            logger.info('Server help email SENT')
-
-        except Exception as e:
-            logger.error('Server error email FAILED')
+            sys.exit('End of script')
