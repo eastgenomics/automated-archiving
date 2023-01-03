@@ -1,7 +1,7 @@
 """
 
 main script for logging purpose.
-Script can be imported and will generate log file in
+script can be imported and will generate log file in
 directory defined below
 
 """
@@ -14,7 +14,7 @@ from logging.handlers import TimedRotatingFileHandler
 FORMATTER = logging.Formatter(
     "%(asctime)s:%(name)s:%(module)s:%(levelname)s:::%(message)s"
     )
-LOG_FILE = "var/log/monitoring/automated-archiving.log"
+LOG_FILE = "/monitoring/automated-archiving.log"
 
 
 def get_console_handler():

@@ -20,12 +20,11 @@ import datetime as dt
 
 from xmlrpc.client import DateTime
 from dateutil.relativedelta import relativedelta
-from datetime import timedelta
 from typing import Union
 from dotenv import load_dotenv
 
 from helper import get_logger
-from notify import Slack
+from slack import SlackClass
 
 from member.members import MEMBER_LIST
 
@@ -60,10 +59,10 @@ try:
 
 except Exception as err:
     logger.error(err)
-    logger.info('End of script')
-    sys.exit()
 
-slack = Slack(
+    sys.exit('End of script')
+
+slack = SlackClass(
     SLACK_TOKEN,
     TAR_MONTH,
     DEBUG
@@ -183,8 +182,7 @@ def dx_login(today: DateTime) -> None:
             error=error_msg,
             )
 
-        logger.info('End of script')
-        sys.exit()
+        sys.exit('End of script')
 
 
 def remove_project_tag(proj: str) -> None:

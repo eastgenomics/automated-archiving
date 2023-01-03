@@ -12,7 +12,7 @@ from helper import get_logger
 logger = get_logger("main log")
 
 
-class Slack():
+class SlackClass():
     def __init__(self, token, months, debug):
         self.token = token
         self.months = months
@@ -150,7 +150,7 @@ class Slack():
                 response = http.post(
                     'https://slack.com/api/chat.postMessage', {
                         'token': self.token,
-                        'channel': f'#{channel}',
+                        'channel': f'U01D8NU3DJ5',
                         'text': message
                     }).json()
             elif purpose == 'tar_notify':
@@ -171,7 +171,7 @@ class Slack():
                     'https://slack.com/api/files.upload',
                     params={
                         'token': self.token,
-                        'channels': f'#{channel}',
+                        'channels': f'U01D8NU3DJ5',
                         'initial_comment': message,
                         'filename': 'tar.txt',
                         'filetype': 'txt'
@@ -189,7 +189,7 @@ class Slack():
                     response = http.post(
                         'https://slack.com/api/chat.postMessage', {
                             'token': self.token,
-                            'channel': f'#{channel}',
+                            'channel': f'U01D8NU3DJ5',
                             'attachments': json.dumps([{
                                 "pretext": message,
                                 "text": text_data}])
@@ -223,7 +223,7 @@ class Slack():
                         response = http.post(
                             'https://slack.com/api/chat.postMessage', {
                                 'token': self.token,
-                                'channel': f'#{channel}',
+                                'channel': f'U01D8NU3DJ5',
                                 'attachments': json.dumps([{
                                     "pretext": message,
                                     "text": text_data}])
