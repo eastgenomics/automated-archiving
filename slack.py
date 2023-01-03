@@ -150,7 +150,7 @@ class SlackClass():
                 response = http.post(
                     'https://slack.com/api/chat.postMessage', {
                         'token': self.token,
-                        'channel': f'U01D8NU3DJ5',
+                        'channel': f'#{channel}',
                         'text': message
                     }).json()
             elif purpose == 'tar_notify':
@@ -171,7 +171,7 @@ class SlackClass():
                     'https://slack.com/api/files.upload',
                     params={
                         'token': self.token,
-                        'channels': f'U01D8NU3DJ5',
+                        'channels': f'#{channel}',
                         'initial_comment': message,
                         'filename': 'tar.txt',
                         'filetype': 'txt'
@@ -189,7 +189,7 @@ class SlackClass():
                     response = http.post(
                         'https://slack.com/api/chat.postMessage', {
                             'token': self.token,
-                            'channel': f'U01D8NU3DJ5',
+                            'channel': f'#{channel}',
                             'attachments': json.dumps([{
                                 "pretext": message,
                                 "text": text_data}])
@@ -223,7 +223,7 @@ class SlackClass():
                         response = http.post(
                             'https://slack.com/api/chat.postMessage', {
                                 'token': self.token,
-                                'channel': f'U01D8NU3DJ5',
+                                'channel': f'#{channel}',
                                 'attachments': json.dumps([{
                                     "pretext": message,
                                     "text": text_data}])
