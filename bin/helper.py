@@ -29,8 +29,8 @@ def get_file_handler():
     return file_handler
 
 
-def get_logger(logger_name):
-    logger = logging.getLogger(logger_name)
+def get_logger(name):
+    logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
     logger.addHandler(get_console_handler())
     logger.addHandler(get_file_handler())

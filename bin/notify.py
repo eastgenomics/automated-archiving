@@ -1,4 +1,3 @@
-from xmlrpc.client import DateTime
 import requests
 import json
 import sys
@@ -7,9 +6,9 @@ from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 
 
-from helper import get_logger
+from bin.helper import get_logger
 
-logger = get_logger("main log")
+logger = get_logger(__name__)
 
 
 class SlackClass():
@@ -106,7 +105,7 @@ class SlackClass():
         self,
         channel: str,
         purpose: str,
-        today: DateTime,
+        today: dt.datetime,
         data: list = None,
         error: str = None,
         day: tuple = (None, None)
