@@ -332,6 +332,7 @@ def directory_archive(
     temp_dict: dict,
     archived_modified_month: int,
     regex_excludes: list,
+    failed_archive: list,
     debug: bool,
 ) -> None:
     """
@@ -349,6 +350,10 @@ def directory_archive(
         dir_path: directory in staging52
         proj_id: staging52 project id
         temp_dict: temporary dict for recording what has been archived
+        archived_modified_month: env variable ARCHIVE_MODIFIED_MONTH
+        regex_excludes: list of regex match to exclude
+        failed_archive: list to record which file-id failed to be archived
+        debug: env ARCHIVE_DEBUG
 
     Returns:
         None
@@ -390,8 +395,12 @@ def directory_archive(
         logger.info(f"NO ARCHIVE: {dir_path} in staging52")
         return
     else:
+        # if directory in staging52 got
+        # no tag indicating dont archive
+        # it will end up here
         big_exclude_list = set()
 
+        # get all file-id that match exclude regex
         for word in regex_excludes:
             exclude_list = [
                 file["id"]
@@ -407,23 +416,35 @@ def directory_archive(
             big_exclude_list.update(exclude_list)
 
         if big_exclude_list:
+            # find all files in directory
+            # exclude those file-id that match those in exclude list
+            # run archive on each of those file
             all_files = [
                 file["id"]
                 for file in list(
                     dx.find_data_objects(project=proj_id, folder=dir_path)
                 )
             ]
-            excluded_list = [
+            archivable_files = [
                 id for id in all_files if id not in big_exclude_list
             ]
 
-            logger.info(f"ARCHIVING EXCLUDE staging52: {dir_path}")
+            logger.info(f"ARCHIVING staging52: {dir_path}")
+            logger.info(f"Excluding {big_exclude_list}")
 
+            archived_file_count = 0
             if not debug:
-                for id in excluded_list:
-                    logger.info(f"ARCHIVING staging52: {id}")
-                    dx.DXFile(id, project=proj_id).archive()
-                temp_dict["archived"].append(f"`{proj_id}` : {dir_path}")
+                for id in archivable_files:
+                    try:
+                        dx.DXFile(id, project=proj_id).archive()
+                        archived_file_count += 1
+                    except Exception as error:
+                        logger.error(error)
+                        failed_archive.append(file_id)
+
+                temp_dict["archived"].append(
+                    f"{proj_id}:{dir_path}: {archived_file_count}"
+                )
         else:
             # if there's thing in directory to be excluded
             # else we do an overall project.archive()
@@ -435,7 +456,7 @@ def directory_archive(
                     )
                     if res["count"] != 0:
                         temp_dict["archived"].append(
-                            f"`{proj_id}` : {dir_path}"
+                            f"{proj_id}:{dir_path}:{res['count']}"
                         )
                 except Exception as error:
                     logger.error(
@@ -455,14 +476,18 @@ def directory_archive(
                         )
                     ]
 
+                    archived_file_count = 0
                     for file_id in all_files:
-                        logger.info(f"ARCHIVING: {file_id}")
                         try:
                             dx.DXFile(file_id, project=proj_id).archive()
+                            archived_file_count += 1
                         except Exception as er:
                             logger.error(er)
+                            failed_archive.append(file_id)
 
-                    temp_dict["archived"].append(f"`{proj_id}` : {dir_path}")
+                    temp_dict["archived"].append(
+                        f"{proj_id}:{dir_path}:{archived_file_count}"
+                    )
 
 
 def get_tag_status(proj_52: str) -> Union[list, list]:
@@ -977,6 +1002,7 @@ def archiving_function(
     archived_modified_month: int,
     archived_txt_path: str,
     archived_pickle_path: str,
+    archived_failed_path: str,
     slack: SlackClass,
     project_52: str = "project-FpVG0G84X7kzq58g19vF1YJQ",
 ) -> None:
@@ -989,10 +1015,19 @@ def archiving_function(
     2. tagged 'never-archive'
     3. modified in the past ARCHIVE_MODIFIED_MONTH month
 
-    Inputs:
-        archive_pickle: memory to get files previously flagged
-            for archiving (dict)
+    Parameters:
+        archive_pickle: dict to store archived or to-be-archived proj/files
         today: to record today's date (datetime)
+        regex_excludes: list of regex to match files for excluding
+        debug: env ARCHIVE_DEBUG
+        archived_modified_month: env ARCHIVED_MODIFIED_MONTH
+        archived_txt_path: path to store archived.txt which list
+            all archived project-id
+        archived_pickle_path: path to store archiving memory
+        archived_failed_path: path to store failed_archive.txt
+            which list all file-id that failed archiving
+        slack: Slack class for posting alert to Slack
+        projec-52: staging52 project-id on DNAnexus
 
     """
 
@@ -1004,14 +1039,17 @@ def archiving_function(
     # just for recording what has been archived
     # plus for Slack notification
     temp_archived = collections.defaultdict(list)
+    failed_archive = []
 
-    # do the archiving
     if list_of_projs:
+        # loop through each project
         for proj_id in list_of_projs:
             project = dx.DXProject(proj_id)
             proj_desc = project.describe()
             proj_name = proj_desc["name"]
             modified_epoch = proj_desc["modified"]
+
+            # check their tags
 
             if "never-archive" in proj_desc["tags"]:
                 logger.info(f"NEVER_ARCHIVE: {proj_name}")
@@ -1019,10 +1057,12 @@ def archiving_function(
             elif "no-archive" in proj_desc["tags"]:
                 logger.info(f"SKIPPED: {proj_name}")
                 continue
+
             elif "archive" in proj_desc["tags"]:
                 files_to_be_excluded = set()
 
                 for word in regex_excludes:
+                    # find all files that match the regex
                     exclude_list = [
                         file["id"]
                         for file in list(
@@ -1034,6 +1074,9 @@ def archiving_function(
                     files_to_be_excluded.update(exclude_list)
 
                 if files_to_be_excluded:
+                    # get all files in the project
+                    # and exclude those that match the regex
+                    # loop through each file-id and run dx.DXFile.archive()
                     all_files = [
                         file["id"]
                         for file in list(
@@ -1048,18 +1091,24 @@ def archiving_function(
                         if file_id not in files_to_be_excluded
                     ]
 
-                    logger.info(f"ARCHIVING EXCLUDE: {proj_id}")
+                    logger.info(f"ARCHIVING: {proj_id}")
+                    logger.info(f"Exclude {files_to_be_excluded}")
+
+                    archived_file_count = 0
                     if not debug:
                         for file_id in archivable_files:
-                            logger.info(f"ARCHIVING: {file_id}")
                             try:
                                 dx.DXFile(file_id, project=proj_id).archive()
+                                archived_file_count += 1
                             except Exception as er:
                                 logger.error(er)
+                                failed_archive.append(file_id)
                         temp_archived["archived"].append(
-                            f"{proj_name} ({proj_id})"
+                            f"{proj_name} {proj_id} {archived_file_count}"
                         )
                 else:
+                    # if no file match the regex
+                    # we do an overall project_archive()
                     logger.info(f"ARCHIVING {proj_id}")
                     if not debug:
                         try:
@@ -1068,7 +1117,105 @@ def archiving_function(
                             )
                             if res["count"] != 0:
                                 temp_archived["archived"].append(
-                                    f"{proj_name} ({proj_id})"
+                                    f"{proj_name} {proj_id} {res['count']}"
+                                )
+                        except Exception as error:
+                            logger.error(
+                                f"Error in archiving project: {error}"
+                            )
+                            logger.info(
+                                "Attempting to archive files individually"
+                            )
+
+                            # get all files in project and do it individually
+                            all_files = [
+                                file["id"]
+                                for file in list(
+                                    dx.find_data_objects(
+                                        project=proj_id, classname="file"
+                                    )
+                                )
+                            ]
+
+                            archived_file_count = 0
+
+                            for file_id in all_files:
+                                logger.info(f"ARCHIVING: {file_id}")
+                                try:
+                                    dx.DXFile(
+                                        file_id, project=proj_id
+                                    ).archive()
+                                    archived_file_count += 1
+                                except Exception as er:
+                                    logger.error(er)
+                                    failed_archive.append(file_id)
+                            temp_archived["archived"].append(
+                                f"{proj_name} {proj_id} {archived_file_count}"
+                            )
+            elif older_than(archived_modified_month, modified_epoch):
+                # True if not modified in the last X month
+
+                big_exclude_list = set()
+
+                # find out which file in project match the regex
+                for word in regex_excludes:
+                    exclude_list = [
+                        file["id"]
+                        for file in list(
+                            dx.find_data_objects(
+                                name=word,
+                                name_mode="regexp",
+                                project=proj_id,
+                            )
+                        )
+                    ]
+                    big_exclude_list.update(exclude_list)
+
+                # if there're files that matches the regex in project
+                # we do archive file-by-file
+                if big_exclude_list:
+                    all_files = [
+                        file["id"]
+                        for file in list(
+                            dx.find_data_objects(
+                                project=proj_id, classname="file"
+                            )
+                        )
+                    ]
+
+                    # get all archivable files
+                    archivable_files = [
+                        file_id
+                        for file_id in all_files
+                        if file_id not in big_exclude_list
+                    ]
+
+                    logger.info(f"ARCHIVING: {proj_id}")
+                    logger.info(f"Excluding these files: {big_exclude_list}")
+
+                    archived_file_count = 0
+                    if not debug:
+                        for file_id in archivable_files:
+                            try:
+                                dx.DXFile(file_id, project=proj_id).archive()
+                                archived_file_count += 1
+                            except Exception as er:
+                                logger.error(er)
+                                failed_archive.append(file_id)
+                        temp_archived["archived"].append(
+                            f"{proj_name} {proj_id} {archived_file_count}"
+                        )
+                else:
+                    # do overall project_archive
+                    logger.info(f"ARCHIVING {proj_id}")
+                    if not debug:
+                        try:
+                            res = dx.api.project_archive(
+                                proj_id, input_params={"folder": "/"}
+                            )
+                            if res["count"] != 0:
+                                temp_archived["archived"].append(
+                                    f"{proj_name} {proj_id} {res['count']}"
                                 )
                         except Exception as error:
                             logger.error(
@@ -1087,127 +1234,26 @@ def archiving_function(
                                 )
                             ]
 
+                            archived_file_count = 0
+
                             for file_id in all_files:
                                 logger.info(f"ARCHIVING: {file_id}")
                                 try:
                                     dx.DXFile(
                                         file_id, project=proj_id
                                     ).archive()
+                                    archived_file_count += 1
                                 except Exception as er:
                                     logger.error(er)
+                                    failed_archive.append(file_id)
                             temp_archived["archived"].append(
-                                f"{proj_name} ({proj_id})"
+                                f"{proj_name} {proj_id} {archived_file_count}"
                             )
-
             else:
-                if older_than(archived_modified_month, modified_epoch):
-                    # True if not modified in the last X month
-
-                    big_exclude_list = set()
-
-                    # loop through each word regex in ENV
-                    # find_data_object based on the word regex
-                    # compile that into a big_exclude_list
-
-                    for word in regex_excludes:
-                        exclude_list = [
-                            file["id"]
-                            for file in list(
-                                dx.find_data_objects(
-                                    name=word,
-                                    name_mode="regexp",
-                                    project=proj_id,
-                                )
-                            )
-                        ]
-                        big_exclude_list.update(exclude_list)
-
-                    # if there're files fitting the exclude regex
-                    # we get all_files, exclude those in big_exclude_list
-                    # then archive each file
-                    # if no files fitting exclude regex
-                    # we archive the whole project as usual
-
-                    if big_exclude_list:
-                        all_files = [
-                            file["id"]
-                            for file in list(
-                                dx.find_data_objects(
-                                    project=proj_id, classname="file"
-                                )
-                            )
-                        ]
-
-                        # get all archivable files
-                        archivable_files = [
-                            file_id
-                            for file_id in all_files
-                            if file_id not in big_exclude_list
-                        ]
-
-                        logger.info(f"ARCHIVING EXCLUDE: {proj_id}")
-                        logger.info(
-                            f"Excluding these files: {big_exclude_list}"
-                        )
-
-                        if not debug:
-                            for file_id in archivable_files:
-                                logger.info(f"ARCHIVING: {file_id}")
-                                try:
-                                    dx.DXFile(
-                                        file_id, project=proj_id
-                                    ).archive()
-                                except Exception as er:
-                                    logger.error(er)
-                            temp_archived["archived"].append(
-                                f"{proj_name} ({proj_id})"
-                            )
-                    else:
-                        logger.info(f"ARCHIVING {proj_id}")
-                        if not debug:
-                            try:
-                                res = dx.api.project_archive(
-                                    proj_id, input_params={"folder": "/"}
-                                )
-                                if res["count"] != 0:
-                                    temp_archived["archived"].append(
-                                        f"{proj_name} (`{proj_id}`)"
-                                    )
-
-                            except Exception as error:
-                                logger.error(
-                                    f"Error in archiving project: {error}"
-                                )
-                                logger.info(
-                                    "Attempting to archive files individually"
-                                )
-
-                                all_files = [
-                                    file["id"]
-                                    for file in list(
-                                        dx.find_data_objects(
-                                            project=proj_id, classname="file"
-                                        )
-                                    )
-                                ]
-
-                                for file_id in all_files:
-                                    logger.info(f"ARCHIVING: {file_id}")
-                                    try:
-                                        dx.DXFile(
-                                            file_id, project=proj_id
-                                        ).archive()
-                                    except Exception as er:
-                                        logger.error(er)
-                                temp_archived["archived"].append(
-                                    f"{proj_name} ({proj_id})"
-                                )
-                else:
-                    # end up here if proj is not older than
-                    # ARCHIVE_MODIFIED_MONTH, meaning
-                    # proj has been modified recently, so we skip
-                    logger.info(f"RECENTLY MODIFIED & SKIPPED: {proj_name}")
-                    continue
+                # project not older than ARCHIVE_MODIFIED_MONTH
+                # meaning proj has been modified recently, so we skip
+                logger.info(f"RECENTLY MODIFIED & SKIPPED: {proj_name}")
+                continue
 
     if list_of_dirs_52:
         for dir in list_of_dirs_52:
@@ -1217,10 +1263,24 @@ def archiving_function(
                 temp_archived,
                 archived_modified_month,
                 regex_excludes,
+                failed_archive,
                 debug,
             )
 
-    # generate archiving txt file
+    # write file-id that failed archive
+    if failed_archive:
+        if os.path.isfile(archived_failed_path):
+            with open(archived_failed_path, "a") as f:
+                f.write("\n" + f"=== {today} ===")
+
+                for line in temp_archived["archived"]:
+                    f.write("\n" + line)
+        else:
+            with open(archived_failed_path, "w") as f:
+                f.write("\n" + f"=== {today} ===")
+                f.write("\n".join(temp_archived["archived"]))
+
+    # keep a copy of what has been archived
     # ONLY IF THERE ARE FILEs BEING ARCHIVED
     if temp_archived:
         if os.path.isfile(archived_txt_path):
