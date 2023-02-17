@@ -56,7 +56,8 @@ if __name__ == "__main__":
         ARCHIVE_PICKLE_PATH = os.environ["AUTOMATED_ARCHIVE_PICKLE_PATH"]
         ARCHIVED_TXT_PATH = os.environ["AUTOMATED_ARCHIVED_TXT_PATH"]
         AUTOMATED_REGEX_EXCLUDE = [
-            text.strip() for text in os.environ["AUTOMATED_REGEX_EXCLUDE"].split(",")
+            text.strip()
+            for text in os.environ["AUTOMATED_REGEX_EXCLUDE"].split(",")
         ]
 
     except Exception as err:

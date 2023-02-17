@@ -68,7 +68,8 @@ class SlackClass:
             ),
             "archived": (":closed_book: *Projects or directory archived:*"),
             "countdown": (
-                f"automated-archiving: " f"{day[0]} day till archiving on {day[1]}"
+                f"automated-archiving: "
+                f"{day[0]} day till archiving on {day[1]}"
             ),
             "alert": (
                 "automated-archiving: Error with dxpy token! Error code:\n"
@@ -130,7 +131,11 @@ class SlackClass:
             if purpose in ["alert", "countdown"]:
                 response = http.post(
                     "https://slack.com/api/chat.postMessage",
-                    {"token": self.token, "channel": f"#{channel}", "text": message},
+                    {
+                        "token": self.token,
+                        "channel": f"#{channel}",
+                        "text": message,
+                    },
                 ).json()
             elif purpose == "tar_notify":
                 # tar_notify requires making a txt file of file-id
@@ -189,7 +194,7 @@ class SlackClass:
                             if end == len(data):
                                 chunks.append(data[start:end])
                         else:
-                            chunks.append(data[start : end - 1])
+                            chunks.append(data[start:end - 1])
                             start = end - 1
 
                     logger.info(f"Sending data in {len(chunks)} chunks")
