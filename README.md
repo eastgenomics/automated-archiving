@@ -45,6 +45,7 @@ The `.py` file should have a `MEMBER_LIST` (dict) which contain key `DNANexus Us
 - `AUTOMATED_MONTH_003` : period (in months) before being marked for archiving (e.g. 3) for 003 projects
 - `AUTOMATED_ARCHIVE_PICKLE_PATH` : pickle file (memory) directory pathway
 - `AUTOMATED_ARCHIVED_TXT_PATH` : directory to output txt file listing all archived projects & directories
+- `AUTOMATED_ARCHIVE_FAILED_PATH`: path to store txt file containing all file-id that failed archiving
 - `TAR_MONTH`: period (in months) for `tar.gz` being inactive to be considered 'old enough' (only used by `get_old_tar_and_notify` function)
 - `ARCHIVE_MODIFIED_MONTH`: period (in months) to determine whether to skip archiving if project or file is modified within this month (e.g. 1)
 - `ARCHIVE_DEBUG`: env to comment out actionable codes (e.g. tag file, remove file tag, archive)

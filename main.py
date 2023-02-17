@@ -53,8 +53,11 @@ if __name__ == "__main__":
         MONTH3 = int(os.environ["AUTOMATED_MONTH_003"])
         TAR_MONTH = int(os.environ["TAR_MONTH"])
         ARCHIVE_MODIFIED_MONTH = int(os.environ["ARCHIVE_MODIFIED_MONTH"])
+
         ARCHIVE_PICKLE_PATH = os.environ["AUTOMATED_ARCHIVE_PICKLE_PATH"]
+        ARCHIVE_FAILED_PATH = os.environ["AUTOMATED_ARCHIVE_FAILED_PATH"]
         ARCHIVED_TXT_PATH = os.environ["AUTOMATED_ARCHIVED_TXT_PATH"]
+
         AUTOMATED_REGEX_EXCLUDE = [
             text.strip()
             for text in os.environ["AUTOMATED_REGEX_EXCLUDE"].split(",")
@@ -87,15 +90,16 @@ if __name__ == "__main__":
         # else we find_and_notify
         if to_be_archived or staging52:
             archiving_function(
-                archive_pickle,
-                today,
-                AUTOMATED_REGEX_EXCLUDE,
-                DEBUG,
-                ARCHIVE_MODIFIED_MONTH,
-                ARCHIVED_TXT_PATH,
-                ARCHIVE_PICKLE_PATH,
-                slack,
-                PROJECT_52,
+                archive_pickle=archive_pickle,
+                today=today,
+                regex_excludes=AUTOMATED_REGEX_EXCLUDE,
+                debug=DEBUG,
+                archived_modified_month=ARCHIVE_MODIFIED_MONTH,
+                archived_txt_path=ARCHIVED_TXT_PATH,
+                archived_pickle_path=ARCHIVE_PICKLE_PATH,
+                archived_failed_path=ARCHIVE_FAILED_PATH,
+                slack=slack,
+                project_52=PROJECT_52,
             )
         else:
             find_projs_and_notify(
