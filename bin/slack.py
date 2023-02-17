@@ -194,7 +194,7 @@ class SlackClass:
                             if end == len(data):
                                 chunks.append(data[start:end])
                         else:
-                            chunks.append(data[start:end - 1])
+                            chunks.append(data[start : end - 1])
                             start = end - 1
 
                     logger.info(f"Sending data in {len(chunks)} chunks")

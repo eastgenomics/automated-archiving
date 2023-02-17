@@ -429,10 +429,39 @@ def directory_archive(
             # else we do an overall project.archive()
             logger.info(f"ARCHIVING staging52: {dir_path}")
             if not debug:
-                res = dx.api.project_archive(
-                    proj_id, input_params={"folder": dir_path}
-                )
-                if res["count"] != 0:
+                try:
+                    res = dx.api.project_archive(
+                        proj_id, input_params={"folder": dir_path}
+                    )
+                    if res["count"] != 0:
+                        temp_dict["archived"].append(
+                            f"`{proj_id}` : {dir_path}"
+                        )
+                except Exception as error:
+                    logger.error(
+                        f"Error in trying to archive project {proj_id}"
+                    )
+                    logger.error(f"at directory: {dir_path}\n{error}")
+                    logger.info("Attempting to archive files individually...")
+
+                    all_files = [
+                        file["id"]
+                        for file in list(
+                            dx.find_data_objects(
+                                project=proj_id,
+                                classname="file",
+                                folder=dir_path,
+                            )
+                        )
+                    ]
+
+                    for file_id in all_files:
+                        logger.info(f"ARCHIVING: {file_id}")
+                        try:
+                            dx.DXFile(file_id, project=proj_id).archive()
+                        except Exception as er:
+                            logger.error(er)
+
                     temp_dict["archived"].append(f"`{proj_id}` : {dir_path}")
 
 
@@ -632,7 +661,8 @@ def find_projs_and_notify(
                         {
                             "user": created_by,
                             "link": "<{}/{}/|{}>".format(
-                                url_prefix, trimmed_id, proj_name),
+                                url_prefix, trimmed_id, proj_name
+                            ),
                         }
                     )
             else:
@@ -647,7 +677,8 @@ def find_projs_and_notify(
                         {
                             "user": created_by,
                             "link": "<{}/{}/|{}>".format(
-                                url_prefix, trimmed_id, proj_name),
+                                url_prefix, trimmed_id, proj_name
+                            ),
                         }
                     )
 
@@ -1040,7 +1071,12 @@ def archiving_function(
                                     f"{proj_name} ({proj_id})"
                                 )
                         except Exception as error:
-                            logger.error(error)
+                            logger.error(
+                                f"Error in archiving project: {error}"
+                            )
+                            logger.info(
+                                "Attempting to archive files individually"
+                            )
 
                             all_files = [
                                 file["id"]
@@ -1139,7 +1175,12 @@ def archiving_function(
                                     )
 
                             except Exception as error:
-                                logger.error(error)
+                                logger.error(
+                                    f"Error in archiving project: {error}"
+                                )
+                                logger.info(
+                                    "Attempting to archive files individually"
+                                )
 
                                 all_files = [
                                     file["id"]
