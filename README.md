@@ -67,7 +67,7 @@ There are 3 tags recognized by the script:
 #### #no-archive
 Projects tagged will temporarily bypass archiving. 
 
-For directories in staging52, if one file within a directory (`/210202_A12905_003`) is tagged, the whole directory will temporarily bypass archiving. 
+For directories in Staging52, if one file within a directory (`/210202_A12905_003`) is tagged, the whole directory will temporarily bypass archiving. 
 
 The tag will be removed if remain inactive for X months (`MONTH_002`)
 
@@ -97,4 +97,4 @@ Current docker command (server):
 ```docker run --env-file <config.file> -v /var/log/monitoring:/monitoring: -v /member:/member <image>```
 
 ## Automation
-A cron job will be set up to run the script on 1st and 15th of each month
+A cron job can be set up to run the script on 1st and 15th of each month
