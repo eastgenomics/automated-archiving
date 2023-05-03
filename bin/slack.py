@@ -118,7 +118,7 @@ class SlackClass:
         http.mount("https://", HTTPAdapter(max_retries=retries))
 
         if self.debug:
-            channel = "U02HPRQ9X7Z"  # TODO: change to #egg-test
+            channel = "#egg-test"
 
         logger.info(f"POST request to channel: {channel} with purpose {purpose}")
 
