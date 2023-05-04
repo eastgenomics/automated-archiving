@@ -12,7 +12,6 @@ It skips files tagged with 'no-archive' / 'never-archive'
 """
 
 import os
-import sys
 import datetime as dt
 
 from bin.helper import get_logger
@@ -30,46 +29,61 @@ from member.members import MEMBER_LIST
 
 logger = get_logger(__name__)
 
+URL_PREFIX = "https://platform.dnanexus.com/panx/projects"
+
 
 if __name__ == "__main__":
-    # importing env variables
-    URL_PREFIX = "https://platform.dnanexus.com/panx/projects"
-
     try:
         logger.info("Reading env variables")
 
-        DEBUG = True if "ARCHIVE_DEBUG" in os.environ else False
-        if DEBUG:
-            logger.info("Running in DEBUG mode")
-        else:
-            logger.info("Running in PRODUCTION mode")
+        DEBUG = os.environ.get("ARCHIVE_DEBUG", False)
+        logger.info(f"Running in DEBUG mode {DEBUG}")
 
+        # auth token
         SLACK_TOKEN = os.environ["SLACK_TOKEN"]
         DNANEXUS_TOKEN = os.environ["DNANEXUS_TOKEN"]
 
-        PROJECT_52 = os.environ["PROJECT_52"]
-        PROJECT_53 = os.environ["PROJECT_53"]
-        MONTH2 = int(os.environ["AUTOMATED_MONTH_002"])
-        MONTH3 = int(os.environ["AUTOMATED_MONTH_003"])
-        TAR_MONTH = int(os.environ["TAR_MONTH"])
-        ARCHIVE_MODIFIED_MONTH = int(os.environ["ARCHIVE_MODIFIED_MONTH"])
+        # project-ids
+        PROJECT_52 = os.environ.get("PROJECT_52", "project-FpVG0G84X7kzq58g19vF1YJQ")
+        PROJECT_53 = os.environ.get("PROJECT_53", "project-FvbzbX84gG9Z3968BJjxYZ1k")
 
-        ARCHIVE_PICKLE_PATH = os.environ["AUTOMATED_ARCHIVE_PICKLE_PATH"]
-        ARCHIVE_FAILED_PATH = os.environ["AUTOMATED_ARCHIVE_FAILED_PATH"]
-        ARCHIVED_TXT_PATH = os.environ["AUTOMATED_ARCHIVED_TXT_PATH"]
+        # number data envs
+        MONTH2 = int(os.environ.get("AUTOMATED_MONTH_002", 6))
+        MONTH3 = int(os.environ.get("AUTOMATED_MONTH_003", 3))
+        TAR_MONTH = int(os.environ.get("TAR_MONTH", 3))
+        ARCHIVE_MODIFIED_MONTH = int(os.environ.get("ARCHIVE_MODIFIED_MONTH", 1))
 
+        # file pathway envs
+        ARCHIVE_PICKLE_PATH = os.environ.get(
+            "AUTOMATED_ARCHIVE_PICKLE_PATH", "/monitoring/archive_dict.pickle"
+        )
+        ARCHIVE_FAILED_PATH = os.environ.get(
+            "AUTOMATED_ARCHIVE_FAILED_PATH", "/monitoring/failed_archive.txt"
+        )
+        ARCHIVED_TXT_PATH = os.environ.get(
+            "AUTOMATED_ARCHIVED_TXT_PATH", "/monitoring/archived.txt"
+        )
+
+        # regex envs
         AUTOMATED_REGEX_EXCLUDE = [
             text.strip()
             for text in os.environ["AUTOMATED_REGEX_EXCLUDE"].split(",")
+            if text.strip()
         ]
 
-    except Exception as err:
-        logger.error(err)
+    except KeyError as missing_env:
+        logger.error(f"env {missing_env} cannot be found in config file")
 
-        sys.exit("End of script")
+        raise KeyError(f"env {missing_env} cannot be found in config file")
 
     # import Slack class
     slack = SlackClass(SLACK_TOKEN, TAR_MONTH, DEBUG)
+
+    # re-define env variables for debug / testing
+    if DEBUG:
+        ARCHIVE_PICKLE_PATH = "/monitoring/archive_dict.test.pickle"
+        ARCHIVE_FAILED_PATH = "/monitoring/failed_archive.test.txt"
+        ARCHIVED_TXT_PATH = "/monitoring/archived.test.txt"
 
     # read pickle memory
     archive_pickle = read_or_new_pickle(ARCHIVE_PICKLE_PATH)
@@ -101,6 +115,22 @@ if __name__ == "__main__":
                 slack=slack,
                 project_52=PROJECT_52,
             )
+
+            find_projs_and_notify(
+                archive_pickle,
+                today,
+                {},
+                MONTH2,
+                MONTH3,
+                DEBUG,
+                MEMBER_LIST,
+                ARCHIVE_PICKLE_PATH,
+                slack,
+                URL_PREFIX,
+                PROJECT_52,
+                PROJECT_53,
+            )
+
         else:
             find_projs_and_notify(
                 archive_pickle,
@@ -127,10 +157,11 @@ if __name__ == "__main__":
             diff = next_archiving_date - today
 
             slack.post_message_to_slack(
-                channel="egg-alerts",
-                purpose="countdown",
-                today=today,
-                day=(diff.days, next_archiving_date),
+                "#egg-alerts",
+                "countdown",
+                today,
+                days_till_archiving=diff.days,
+                archiving_date=next_archiving_date,
             )
         else:
             logger.info("No data in memory")

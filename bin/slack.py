@@ -1,6 +1,5 @@
 import requests
 import json
-import sys
 import datetime as dt
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
@@ -12,74 +11,93 @@ logger = get_logger(__name__)
 
 
 class SlackClass:
-    def __init__(self, token, months, debug):
+    def __init__(self, token: str, months: int, debug: bool) -> None:
         self.token = token
         self.months = months
         self.debug = debug
 
-    def fetch_messages(
-        self, purpose: str, today: str, day: tuple, error_msg: str
-    ) -> str:
+    def _fetch_messages(self, purpose: str, today: str, **kwargs) -> str:
         """
-        Function to return the right message for the give purpose
+        Function to return the right message for the given purpose
 
-        Inputs:
-            purpose: decide on which message to return (etc, 002_proj, alert..)
-            today: today's date to display on Slack message
-            day: tuple of dates (vary) depending on purpose
-            error_msg: error message from if purpose == alert (dxpy fail)
+        Parameters:
+        :param: purpose: decide on which message to return e.g. 002, alert
+        :param: today: date to display on Slack message
+        :param: **kwarg: see below
+
+        :Keyword Arguments:
+            **days_till_archiving `int`
+                only when sending Slack countdown
+            **archiving_date `datetime`
+                most messages
+            **tar_period_start_date `str`
+                earliest period of tar.gz
+            **tar_period_end_date `str`
+                latest period of tar.gz
+            **dnanexus_error `str`
+                error message from dnanexus login
 
         Return:
-            string of message
+            Slack message based on :param: purpose
         """
 
+        days_till_archiving = kwargs.get("days_till_archiving")
+        archiving_date = kwargs.get("archiving_date")
+        tar_period_start_date = kwargs.get("tar_period_start_date")
+        tar_period_end_date = kwargs.get("tar_period_end_date")
+        dnanexus_error = kwargs.get("dnanexus_error")
+
         msgs = {
-            "002_proj": (
+            "002": (
                 f":bangbang: {today} *002 projects to be archived:*"
-                "\n_Please tag `no-archive` or `never-archive`_"
-                f"\n*Archive date: {day[0]}*"
+                "\n_Please tag `no-archive` or `never-archive` "
+                "in project.Settings.Tags_"
+                f"\n*Archive date: {archiving_date}*"
             ),
-            "003_proj": (
+            "003": (
                 f":bangbang: {today} *003 projects to be archived:*"
-                "\n_Please tag `no-archive` or `never-archive`_"
-                f"\n*Archive date: {day[0]}*"
+                "\n_Please tag `no-archive` or `never-archive` "
+                "in project.Settings.Tags_"
+                f"\n*Archive date: {archiving_date}*"
             ),
-            "staging_52": (
+            "staging52": (
                 f":bangbang: {today} "
                 "*Directories in `staging52` to be archived:*"
-                "\n_Please tag `no-archive` or `never-archive`_"
-                f"\n*Archive date: {day[0]}*"
+                "\n_Please tag `no-archive` or `never-archive` "
+                "in on any file within the directory_"
+                f"\n*Archive date: {archiving_date}*"
             ),
-            "special_notify": (
+            "speical-notify": (
                 f":warning: {today} "
                 "*Inactive project or directory to be archived*"
-                "\n_unless re-tag `no-archive` or `never-archive`_"
-                f"\n*Archive date: {day[0]}*"
+                "\n_unless re-tag `no-archive`_"
+                f"\n*Archive date: {archiving_date}*"
             ),
-            "no_archive": (
+            "no-archive": (
                 f":male-detective: {today} "
                 "*Projects or directory tagged with `no-archive`:*"
                 "\n_just for your information_"
             ),
-            "never_archive": (
+            "never-archive": (
                 f":female-detective: {today} "
                 "*Projects or directory tagged with `never-archive`:*"
                 "\n_just for your information_"
             ),
-            "archived": (":closed_book: *Projects or directory archived:*"),
+            "archived": ":closed_book: *Projects or directory archived:*",
             "countdown": (
-                f"automated-archiving: "
-                f"{day[0]} day till archiving on {day[1]}"
+                "automated-archiving: "
+                f"{days_till_archiving} day till archiving on {archiving_date}"
             ),
             "alert": (
                 "automated-archiving: Error with dxpy token! Error code:\n"
-                f"`{error_msg}`"
+                f"`{dnanexus_error}`"
             ),
-            "tar_notify": (
-                "automated-tar-notify: "
-                f"`tar.gz` not modified in the last {self.months} month"
-                f"\nEarliest Date: {day[0]} -- Latest Date: {day[1]}"
-                "\n_Please find complete list of file-id below:_"
+            "tar": (
+                "automated-tar-notify: `tar.gz` not modified in the last"
+                f" {self.months} month\nPeriod:"
+                f" {tar_period_start_date} -"
+                f" {tar_period_end_date}\n_Please find complete list of"
+                " file-id below:_"
             ),
         }
 
@@ -90,42 +108,46 @@ class SlackClass:
         channel: str,
         purpose: str,
         today: dt.datetime,
-        data: list = None,
-        error: str = None,
-        day: tuple = (None, None),
+        data: list = [],
+        **kwargs,
     ) -> None:
         """
         Request function for slack web api for:
         (1) send alert msg when dxpy auth failed (alert=True)
         (2) send to-be-archived notification (default alert=False)
 
-        Inputs:
-            channel: e.g. egg-alerts, egg-logs
-            purpose: this decide what message to send
-            data: list of projs / dirs to be archived
-            error: (optional) (required only when dxpy failed) dxpy error msg
-            day: (optional) tuple of (day till next date, next run date) depend
-            on purpose
+        Parameters:
+        :param: channel: e.g. egg-alerts, egg-logs
+        :param: purpose: alert, countdown, tar
+        :param: today: datetime to appear in Slack notification
+        :param: data: list of projs or dirs to be archived
+        :param: **kwarg: see below
 
-        Return:
-            None
+        :Keyword Arguments:
+            **days_till_archiving `int`
+                only when sending Slack countdown
+            **archiving_date `datetime`
+                most messages
+            **tar_period_start_date `str`
+                earliest period of tar.gz
+            **tar_period_end_date `str`
+                latest period of tar.gz
+            **dnanexus_error `str`
+                error message from dnanexus login
         """
 
         http = requests.Session()
         retries = Retry(total=5, backoff_factor=10, method_whitelist=["POST"])
         http.mount("https://", HTTPAdapter(max_retries=retries))
 
-        logger.info(f"Posting data for: {purpose}")
+        if self.debug:
+            channel = "#egg-test"
+
+        logger.info(f"POST request to channel: {channel} with purpose {purpose}")
 
         strtoday = today.strftime("%d/%m/%Y")
-        message = self.fetch_messages(purpose, strtoday, day, error)
 
-        if not self.debug:
-            pass
-        else:
-            channel = "egg-test"
-
-        logger.info(f"Sending POST request to channel: #{channel}")
+        message = self._fetch_messages(purpose, strtoday, **kwargs)
 
         try:
             if purpose in ["alert", "countdown"]:
@@ -133,12 +155,12 @@ class SlackClass:
                     "https://slack.com/api/chat.postMessage",
                     {
                         "token": self.token,
-                        "channel": f"#{channel}",
+                        "channel": f"{channel}",
                         "text": message,
                     },
                 ).json()
-            elif purpose == "tar_notify":
-                # tar_notify requires making a txt file of file-id
+            elif purpose == "tar":
+                # tar-notify requires making a txt file of file-id
                 # then send file as attachment using an enctype
                 # of multipart/form-data
 
@@ -152,7 +174,7 @@ class SlackClass:
                     "https://slack.com/api/files.upload",
                     params={
                         "token": self.token,
-                        "channels": f"#{channel}",
+                        "channels": f"{channel}",
                         "initial_comment": message,
                         "filename": "tar.txt",
                         "filetype": "txt",
@@ -170,7 +192,7 @@ class SlackClass:
                         "https://slack.com/api/chat.postMessage",
                         {
                             "token": self.token,
-                            "channel": f"#{channel}",
+                            "channel": f"{channel}",
                             "attachments": json.dumps(
                                 [{"pretext": message, "text": text_data}]
                             ),
@@ -206,7 +228,7 @@ class SlackClass:
                             "https://slack.com/api/chat.postMessage",
                             {
                                 "token": self.token,
-                                "channel": f"#{channel}",
+                                "channel": f"{channel}",
                                 "attachments": json.dumps(
                                     [{"pretext": message, "text": text_data}]
                                 ),
@@ -217,18 +239,18 @@ class SlackClass:
                             break
 
             if response["ok"]:
-                logger.info(f"POST request to channel #{channel} successful")
+                logger.info(f"POST request to {channel} successful")
             else:
                 # slack api request failed
-                error_code = response["error"]
-                logger.error(f"Slack API error to #{channel}")
-                logger.error(f"Error Code From Slack: {error_code}")
+                slack_error = response["error"]
 
-                sys.exit("End of script")
+                raise ValueError(
+                    "Error with Slack API or incorrect channel input to"
+                    f" Slack: {slack_error}"
+                )
 
-        except Exception as e:
-            # endpoint request fail from server
-            logger.error(f"Error sending POST request to channel #{channel}")
-            logger.error(e)
+        except Exception as other_exceptions:
+            # endpoint request fail from server-side
+            logger.error(f"Error sending POST request to channel {channel}")
 
-            sys.exit("End of script")
+            raise ValueError(other_exceptions)
