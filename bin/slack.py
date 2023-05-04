@@ -23,6 +23,19 @@ class SlackClass:
         Parameters:
         :param: purpose: decide on which message to return e.g. 002, alert
         :param: today: date to display on Slack message
+        :param: **kwarg: see below
+
+        :Keyword Arguments:
+            **days_till_archiving `int`
+                only when sending Slack countdown
+            **archiving_date `datetime`
+                most messages
+            **tar_period_start_date `str`
+                earliest period of tar.gz
+            **tar_period_end_date `str`
+                latest period of tar.gz
+            **dnanexus_error `str`
+                error message from dnanexus login
 
         Return:
             Slack message based on :param: purpose
@@ -108,9 +121,19 @@ class SlackClass:
         :param: purpose: alert, countdown, tar
         :param: today: datetime to appear in Slack notification
         :param: data: list of projs or dirs to be archived
-        :param: error: [optional] (required only when dxpy failed) dnanexus
-            error message
-        :param: day: [optional] tuple of (day till next date, next run date)
+        :param: **kwarg: see below
+
+        :Keyword Arguments:
+            **days_till_archiving `int`
+                only when sending Slack countdown
+            **archiving_date `datetime`
+                most messages
+            **tar_period_start_date `str`
+                earliest period of tar.gz
+            **tar_period_end_date `str`
+                latest period of tar.gz
+            **dnanexus_error `str`
+                error message from dnanexus login
         """
 
         http = requests.Session()

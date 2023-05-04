@@ -18,11 +18,11 @@ def read_or_new_pickle(path: str) -> dict:
     Read stored pickle memory for the script
     Using defaultdict() automatically create new dict.key()
 
-    Input:
-        Path to store the pickle (memory)
+    Parameters:
+    :param: path: directory path to pickle
 
     Returns:
-        dict: the stored pickle dict
+        `dict`: collection.defaultdict(list)
     """
     logger.info(f"Reading pickle at: {path}")
     if os.path.isfile(path):
@@ -40,13 +40,13 @@ def older_than(month: int, modified_epoch: int) -> bool:
     """
     Determine if a modified epoch date is older than X month
 
-    Inputs:
-        month: X month (int)
-        modified_epoch: proj modified date (epoch)
+    Parameters:
+    :param: month: `int` N month to check against
+    :param: modified_epoch: `int` project modified datetime epoch
 
     Returns (Boolean):
-        True if haven't been modified in last X month
-        False if have been modified in last X month
+        - `True` if haven't been modified in last X month
+        - `False` if have been modified in last X month
     """
 
     modified = modified_epoch / 1000.0
@@ -69,9 +69,9 @@ def check_directory(directory: str, month: int) -> bool:
     :param: month: number of month inactive
 
     Returns:
-    True if its 002 has not been active for X month
-    False if no 002 project
-    False if 002 project has been active in the past X month
+        - `True` if its 002 has not been active for X month
+        - `False` if no 002 project
+        - `False` if 002 project has been active in the past X month
     """
 
     result = list(
@@ -101,8 +101,10 @@ def dx_login(today: dt.datetime, token: str, slack: SlackClass) -> None:
     DNANexus login check function.
     If fail, send Slack notification
 
-    Returns:
-        None
+    Parameters:
+    :param: today: date for Slack notification purpose
+    :param: token: dnanexus auth token
+    :param: slack: SlackClass for notification purpose
     """
 
     DX_SECURITY_CONTEXT = {"auth_token_type": "Bearer", "auth_token": token}
@@ -140,7 +142,7 @@ def remove_project_tag(project_id: str) -> None:
     Not directories in Staging52
 
     Parameters:
-        project-id
+    :param: project-id
     """
 
     logger.info(f"REMOVE TAG: {project_id}")
@@ -827,10 +829,8 @@ def tagging_function(debug: bool) -> None:
     Function to check latest archivalStatus of files
     in a project and add appropriate tag
 
-    Output:
-        status_dict: a dict with project-id (key)
-            and (value) achival status of files within the project (set)
-
+    Parameters:
+    :param: debug: `bool` whether the script is ran in DEBUG mode
     """
 
     logger.info("Running tagging function")
@@ -1171,12 +1171,12 @@ def get_next_archiving_date(today: dt.datetime) -> dt.datetime:
     """
     Function to get the next automated-archive run date
 
-    Input:
-        today (datetime)
+    Parameters:
+    :param: today `datetime`
 
-    Return (datetime):
-        If today.day is between 1-15: return 15th of this month
-        If today.day is after 15: return 1st day of next month
+    Return `datetime`
+        if today.day is between 1-15: return 15th of this month
+        if today.day is after 15: return 1st day of next month
 
     """
 
@@ -1196,11 +1196,11 @@ def make_datetime_format(modified_epoch: str) -> dt.datetime:
     Function to turn modified epoch (returned by DNANexus)
     into readable datetime format
 
-    Input:
-        epoch modified datetime (from dnanexus describe)
+    Parameters:
+    :param: modified_epoch: epoch datetime from dnanexus.describe()
 
     Return:
-        datetime
+        epoch datetime in `datetime` format
 
     """
 
@@ -1218,11 +1218,15 @@ def get_old_tar_and_notify(
 ) -> None:
     """
     Function to get tar which are not modified in the last 3 months
+    
     Regex Format:
         only returns "run.....tar.gz" in staging52
-
-    Return:
-        None
+    
+    :param: today: date for Slack notification
+    :param: tar_month: N month of inactivity for tar.gz
+        before getting picked up
+    :param: slack: SlackClass for notification purpose
+    :param: project_52: project-id of Staging52
 
     """
     logger.info("Getting old tar.gz in staging52")
