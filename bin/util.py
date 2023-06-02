@@ -146,7 +146,9 @@ def remove_project_tag(project_id: str) -> None:
     """
 
     logger.info(f"REMOVE TAG: {project_id}")
-    dx.api.project_remove_tags(project_id, input_params={"tags": ["no-archive"]})
+    dx.api.project_remove_tags(
+        project_id, input_params={"tags": ["no-archive"]}
+    )
 
 
 def get_all_projects_in_dnanexus() -> Union[dict, dict]:
@@ -302,7 +304,9 @@ def get_all_directories(project_id: str) -> list:
     dx_project = dx.DXProject(project_id)
 
     # get all directories in root
-    all_directories_in_project = dx_project.list_folder(only="folders")["folders"]
+    all_directories_in_project = dx_project.list_folder(only="folders")[
+        "folders"
+    ]
 
     # filter out the /processed folder in root of staging-52
     directories_in_52 = [
@@ -314,7 +318,9 @@ def get_all_directories(project_id: str) -> list:
     # get all directories in /processed
     directories_in_52_processed = [
         (file.lstrip("/").lstrip("/processed"), file)
-        for file in dx_project.list_folder("/processed", only="folders")["folders"]
+        for file in dx_project.list_folder("/processed", only="folders")[
+            "folders"
+        ]
     ]
 
     return directories_in_52 + directories_in_52_processed
@@ -355,7 +361,9 @@ def directory_archive(
 
     # check for 'never-archive' tag in directory
     never_archive = list(
-        dx.find_data_objects(project=proj_id, folder=dir_path, tags=["never-archive"])
+        dx.find_data_objects(
+            project=proj_id, folder=dir_path, tags=["never-archive"]
+        )
     )
 
     if never_archive:
@@ -378,7 +386,9 @@ def directory_archive(
 
     # check for 'no-archive' tag in directory
     no_archive = list(
-        dx.find_data_objects(project=proj_id, folder=dir_path, tags=["no-archive"])
+        dx.find_data_objects(
+            project=proj_id, folder=dir_path, tags=["no-archive"]
+        )
     )
 
     if no_archive:
@@ -412,7 +422,9 @@ def directory_archive(
             # run archive on each of those file
             file_ids = [
                 file["id"]
-                for file in list(dx.find_data_objects(project=proj_id, folder=dir_path))
+                for file in list(
+                    dx.find_data_objects(project=proj_id, folder=dir_path)
+                )
             ]
 
             archived_file_count = 0
@@ -611,7 +623,9 @@ def find_projs_and_notify(
         if check_directory(trimmed_directory, month2)
     ]
 
-    logger.info(f"No. of old enough directories: {len(old_enough_directories)}")
+    logger.info(
+        f"No. of old enough directories: {len(old_enough_directories)}"
+    )
 
     if old_enough_projects_dict:
         logger.info("Processing project")
@@ -636,7 +650,9 @@ def find_projs_and_notify(
                         describe={"fields": {"archivalState": True}},
                     )
                 )
-                status = set([x["describe"]["archivalState"] for x in all_files])
+                status = set(
+                    [x["describe"]["archivalState"] for x in all_files]
+                )
 
             if "live" in status:
                 # there is something to be archived
@@ -753,7 +769,9 @@ def find_projs_and_notify(
                                         "project": project_52,
                                     },
                                 )
-                        special_notify_list.append(f"{original_dir} in `staging52`")
+                        special_notify_list.append(
+                            f"{original_dir} in `staging52`"
+                        )
                         archive_pickle["staging_52"].append(original_dir)
                         to_be_archived_dir.append(
                             f"<{STAGING_PREFIX}/{trimmed_dir}|{original_dir}>"
@@ -853,13 +871,19 @@ def tagging_function(debug: bool) -> None:
             if "partial archived" in tags:
                 dx.api.project_remove_tags(
                     k,
-                    input_params={"tags": ["partial archived", "fully archived"]},
+                    input_params={
+                        "tags": ["partial archived", "fully archived"]
+                    },
                 )
-                dx.api.project_add_tags(k, input_params={"tags": ["fully archived"]})
+                dx.api.project_add_tags(
+                    k, input_params={"tags": ["fully archived"]}
+                )
             elif "fully archived" in tags:
                 continue
             else:
-                dx.api.project_add_tags(k, input_params={"tags": ["fully archived"]})
+                dx.api.project_add_tags(
+                    k, input_params={"tags": ["fully archived"]}
+                )
 
     # whatever is leftover from above projects, we do the query
     # they can be 'live' or 'partially archived'
@@ -887,7 +911,9 @@ def tagging_function(debug: bool) -> None:
                     # we do a reset and add 'partial'
                     dx.api.project_remove_tags(
                         k,
-                        input_params={"tags": ["partial archived", "fully archived"]},
+                        input_params={
+                            "tags": ["partial archived", "fully archived"]
+                        },
                     )
                     dx.api.project_add_tags(
                         k, input_params={"tags": ["partial archived"]}
@@ -905,7 +931,9 @@ def tagging_function(debug: bool) -> None:
                 if "partial archived" in tags:
                     dx.api.project_remove_tags(
                         k,
-                        input_params={"tags": ["partial archived", "fully archived"]},
+                        input_params={
+                            "tags": ["partial archived", "fully archived"]
+                        },
                     )
                     dx.api.project_add_tags(
                         k, input_params={"tags": ["fully archived"]}
@@ -971,10 +999,18 @@ def archiving_function(
     if list_of_projects_in_memory:
         # loop through each project
         for proj_id in list_of_projects_in_memory:
-            project = dx.DXProject(proj_id)
+            try:
+                project = dx.DXProject(proj_id)
 
-            # query latest project detail on archiving time
-            detail = project.describe()
+                # query latest project detail on archiving time
+                detail = project.describe()
+            except dx.exceptions.ResourceNotFound as e:
+                # if project-id no longer exist on DNAnexus
+                # probably project got deleted or etc.
+                # causing this part to fail
+                logger.info(f"{proj_id} seems to have been deleted" f"{e}")
+                continue
+
             proj_name = detail["name"]
             modified_epoch = detail["modified"]
             tags = detail["tags"]
@@ -1088,15 +1124,20 @@ def archiving_function(
 
                             for file_id in file_ids:
                                 try:
-                                    dx.DXFile(file_id, project=proj_id).archive()
+                                    dx.DXFile(
+                                        file_id, project=proj_id
+                                    ).archive()
                                     archived_file_count += 1
                                 except Exception as e:
                                     logger.error(e)
-                                    failed_archive.append(f"{proj_id}:{file_id}")
+                                    failed_archive.append(
+                                        f"{proj_id}:{file_id}"
+                                    )
 
                             if archived_file_count > 0:
                                 temp_archived["archived"].append(
-                                    f"{proj_name} {proj_id} " f"{archived_file_count}"
+                                    f"{proj_name} {proj_id} "
+                                    f"{archived_file_count}"
                                 )
             else:
                 # project not older than ARCHIVE_MODIFIED_MONTH
@@ -1218,10 +1259,10 @@ def get_old_tar_and_notify(
 ) -> None:
     """
     Function to get tar which are not modified in the last 3 months
-    
+
     Regex Format:
         only returns "run.....tar.gz" in staging52
-    
+
     :param: today: date for Slack notification
     :param: tar_month: N month of inactivity for tar.gz
         before getting picked up
@@ -1235,7 +1276,9 @@ def get_old_tar_and_notify(
         dx.find_data_objects(
             name="^run.*.tar.gz",
             name_mode="regexp",
-            describe={"fields": {"modified": True, "folder": True, "name": True}},
+            describe={
+                "fields": {"modified": True, "folder": True, "name": True}
+            },
             project=project_52,
         )
     )
@@ -1250,7 +1293,10 @@ def get_old_tar_and_notify(
         for x in filtered_result
     ]
 
-    dates = [make_datetime_format(d["describe"]["modified"]) for d in filtered_result]
+    dates = [
+        make_datetime_format(d["describe"]["modified"])
+        for d in filtered_result
+    ]
 
     # earliest date among the list of tars
     min_date = min(dates).strftime("%Y-%m-%d")

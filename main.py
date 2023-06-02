@@ -44,14 +44,20 @@ if __name__ == "__main__":
         DNANEXUS_TOKEN = os.environ["DNANEXUS_TOKEN"]
 
         # project-ids
-        PROJECT_52 = os.environ.get("PROJECT_52", "project-FpVG0G84X7kzq58g19vF1YJQ")
-        PROJECT_53 = os.environ.get("PROJECT_53", "project-FvbzbX84gG9Z3968BJjxYZ1k")
+        PROJECT_52 = os.environ.get(
+            "PROJECT_52", "project-FpVG0G84X7kzq58g19vF1YJQ"
+        )
+        PROJECT_53 = os.environ.get(
+            "PROJECT_53", "project-FvbzbX84gG9Z3968BJjxYZ1k"
+        )
 
         # number data envs
         MONTH2 = int(os.environ.get("AUTOMATED_MONTH_002", 6))
         MONTH3 = int(os.environ.get("AUTOMATED_MONTH_003", 3))
         TAR_MONTH = int(os.environ.get("TAR_MONTH", 3))
-        ARCHIVE_MODIFIED_MONTH = int(os.environ.get("ARCHIVE_MODIFIED_MONTH", 1))
+        ARCHIVE_MODIFIED_MONTH = int(
+            os.environ.get("ARCHIVE_MODIFIED_MONTH", 1)
+        )
 
         # file pathway envs
         ARCHIVE_PICKLE_PATH = os.environ.get(

@@ -67,7 +67,7 @@ class SlackClass:
                 "in on any file within the directory_"
                 f"\n*Archive date: {archiving_date}*"
             ),
-            "speical-notify": (
+            "special-notify": (
                 f":warning: {today} "
                 "*Inactive project or directory to be archived*"
                 "\n_unless re-tag `no-archive`_"
@@ -143,7 +143,9 @@ class SlackClass:
         if self.debug:
             channel = "#egg-test"
 
-        logger.info(f"POST request to channel: {channel} with purpose {purpose}")
+        logger.info(
+            f"POST request to channel: {channel} with purpose {purpose}"
+        )
 
         strtoday = today.strftime("%d/%m/%Y")
 
