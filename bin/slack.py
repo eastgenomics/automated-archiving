@@ -67,7 +67,7 @@ class SlackClass:
                 "in on any file within the directory_"
                 f"\n*Archive date: {archiving_date}*"
             ),
-            "speical-notify": (
+            "special-notify": (
                 f":warning: {today} "
                 "*Inactive project or directory to be archived*"
                 "\n_unless re-tag `no-archive`_"

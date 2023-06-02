@@ -971,10 +971,18 @@ def archiving_function(
     if list_of_projects_in_memory:
         # loop through each project
         for proj_id in list_of_projects_in_memory:
-            project = dx.DXProject(proj_id)
+            try:
+                project = dx.DXProject(proj_id)
 
-            # query latest project detail on archiving time
-            detail = project.describe()
+                # query latest project detail on archiving time
+                detail = project.describe()
+            except dx.exceptions.ResourceNotFound as e:
+                # if project-id no longer exist on DNAnexus
+                # probably project got deleted or etc.
+                # causing this part to fail
+                logger.info(f"{proj_id} seems to have been deleted" f"{e}")
+                continue
+
             proj_name = detail["name"]
             modified_epoch = detail["modified"]
             tags = detail["tags"]
@@ -1218,10 +1226,10 @@ def get_old_tar_and_notify(
 ) -> None:
     """
     Function to get tar which are not modified in the last 3 months
-    
+
     Regex Format:
         only returns "run.....tar.gz" in staging52
-    
+
     :param: today: date for Slack notification
     :param: tar_month: N month of inactivity for tar.gz
         before getting picked up
