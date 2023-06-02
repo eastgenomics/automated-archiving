@@ -143,7 +143,9 @@ class SlackClass:
         if self.debug:
             channel = "#egg-test"
 
-        logger.info(f"POST request to channel: {channel} with purpose {purpose}")
+        logger.info(
+            f"POST request to channel: {channel} with purpose {purpose}"
+        )
 
         strtoday = today.strftime("%d/%m/%Y")
 
