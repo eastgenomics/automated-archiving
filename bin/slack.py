@@ -2,6 +2,9 @@ import requests
 import json
 import datetime as dt
 
+from requests.adapters import HTTPAdapter
+from urllib3.util import Retry
+
 
 from bin.helper import get_logger
 
@@ -18,6 +21,17 @@ class SlackClass:
         self.token = token
         self.months = months
         self.debug = debug
+
+        self._http = requests.Session()
+        self._retries = Retry(
+            total=5,
+            backoff_factor=10,
+            method_whitelist=["POST"],
+        )
+        self._http.mount(
+            "https://",
+            HTTPAdapter(max_retries=self._retries),
+        )
 
     def _fetch_messages(
         self,
@@ -157,7 +171,7 @@ class SlackClass:
 
         try:
             if purpose in ["alert", "countdown"]:
-                response = requests.post(
+                response = self._http.post(
                     "https://slack.com/api/chat.postMessage",
                     {
                         "token": self.token,
@@ -176,7 +190,7 @@ class SlackClass:
                         f.write(f"{txt}\n")
 
                 tar_file = {"file": ("tar.txt", open("tar.txt", "rb"), "txt")}
-                response = requests.post(
+                response = self._http.post(
                     "https://slack.com/api/files.upload",
                     params={
                         "token": self.token,
@@ -194,7 +208,7 @@ class SlackClass:
 
                 # number above 7,995 seems to get truncation
                 if len(text_data) < 7995:
-                    response = requests.post(
+                    response = self._http.post(
                         "https://slack.com/api/chat.postMessage",
                         {
                             "token": self.token,
@@ -234,7 +248,7 @@ class SlackClass:
                     for chunk in chunks:
                         text_data = "\n".join(chunk)
 
-                        response = requests.post(
+                        response = self._http.post(
                             "https://slack.com/api/chat.postMessage",
                             {
                                 "token": self.token,
