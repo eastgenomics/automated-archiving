@@ -1,16 +1,3 @@
-"""
-Automated-archiving
-
-This script will check for projs and directories within staging52/53
-which has not been active for the past X months (inactive). It will then
-send a Slack notification to notify the will-be-archived files
-
-The second run of the script will start the archiving process previously
-noted to-be-archive files.
-It skips files tagged with 'no-archive' / 'never-archive'
-
-"""
-
 import os
 import datetime as dt
 
@@ -20,57 +7,77 @@ from bin.util import (
     read_or_new_pickle,
     dx_login,
     get_old_tar_and_notify,
+)
+from bin.archiving import (
     archiving_function,
-    find_projs_and_notify,
+    find_projects_and_notify,
     get_next_archiving_date,
 )
+
 
 from member.members import MEMBER_LIST
 
 logger = get_logger(__name__)
 
-URL_PREFIX = "https://platform.dnanexus.com/panx/projects"
+URL_PREFIX: str = "https://platform.dnanexus.com/panx/projects"
 
 
 if __name__ == "__main__":
+    # env imports
     try:
         logger.info("Reading env variables")
 
-        DEBUG = os.environ.get("ARCHIVE_DEBUG", False)
+        # debug mode
+        DEBUG: bool = os.environ.get("ARCHIVE_DEBUG", False)
         logger.info(f"Running in DEBUG mode {DEBUG}")
 
-        # auth token
-        SLACK_TOKEN = os.environ["SLACK_TOKEN"]
-        DNANEXUS_TOKEN = os.environ["DNANEXUS_TOKEN"]
+        # slack token
+        SLACK_TOKEN: str = os.environ["SLACK_TOKEN"]
+        # dnanexus token
+        DNANEXUS_TOKEN: str = os.environ["DNANEXUS_TOKEN"]
 
-        # project-ids
-        PROJECT_52 = os.environ.get(
-            "PROJECT_52", "project-FpVG0G84X7kzq58g19vF1YJQ"
+        # project ids
+        PROJECT_52: str = os.environ.get(
+            "PROJECT_52",
+            "project-FpVG0G84X7kzq58g19vF1YJQ",
         )
-        PROJECT_53 = os.environ.get(
-            "PROJECT_53", "project-FvbzbX84gG9Z3968BJjxYZ1k"
-        )
-
-        # number data envs
-        MONTH2 = int(os.environ.get("AUTOMATED_MONTH_002", 6))
-        MONTH3 = int(os.environ.get("AUTOMATED_MONTH_003", 3))
-        TAR_MONTH = int(os.environ.get("TAR_MONTH", 3))
-        ARCHIVE_MODIFIED_MONTH = int(
-            os.environ.get("ARCHIVE_MODIFIED_MONTH", 1)
+        PROJECT_53: str = os.environ.get(
+            "PROJECT_53",
+            "project-FvbzbX84gG9Z3968BJjxYZ1k",
         )
 
-        # file pathway envs
+        # inactivity weeks for 002 projects
+        MONTH2: int = int(os.environ.get("AUTOMATED_MONTH_002", 6))
+        # inactivity weeks for 003 projects
+        MONTH3: int = int(os.environ.get("AUTOMATED_MONTH_003", 3))
+        # inactivity weeks for .tar files in staging52
+        TAR_MONTH: int = int(os.environ.get("TAR_MONTH", 3))
+
+        # grace period
+        ARCHIVE_MODIFIED_MONTH: int = int(
+            os.environ.get(
+                "ARCHIVE_MODIFIED_MONTH",
+                1,
+            )
+        )
+
+        # pathway for memory pickle file
         ARCHIVE_PICKLE_PATH = os.environ.get(
-            "AUTOMATED_ARCHIVE_PICKLE_PATH", "/monitoring/archive_dict.pickle"
+            "AUTOMATED_ARCHIVE_PICKLE_PATH",
+            "/monitoring/archive_dict.pickle",
         )
+        # pathway for txt file to record file id that failed archiving
         ARCHIVE_FAILED_PATH = os.environ.get(
-            "AUTOMATED_ARCHIVE_FAILED_PATH", "/monitoring/failed_archive.txt"
+            "AUTOMATED_ARCHIVE_FAILED_PATH",
+            "/monitoring/failed_archive.txt",
         )
+        # pathway for txt file to record file id that has been archived
         ARCHIVED_TXT_PATH = os.environ.get(
-            "AUTOMATED_ARCHIVED_TXT_PATH", "/monitoring/archived.txt"
+            "AUTOMATED_ARCHIVED_TXT_PATH",
+            "/monitoring/archived.txt",
         )
 
-        # regex envs
+        # regex to exclude filename that fits the pattern
         AUTOMATED_REGEX_EXCLUDE = [
             text.strip()
             for text in os.environ["AUTOMATED_REGEX_EXCLUDE"].split(",")
@@ -82,7 +89,7 @@ if __name__ == "__main__":
 
         raise KeyError(f"env {missing_env} cannot be found in config file")
 
-    # import Slack class
+    # define Slack class
     slack = SlackClass(SLACK_TOKEN, TAR_MONTH, DEBUG)
 
     # re-define env variables for debug / testing
@@ -92,11 +99,11 @@ if __name__ == "__main__":
         ARCHIVED_TXT_PATH = "/monitoring/archived.test.txt"
 
     # read pickle memory
-    archive_pickle = read_or_new_pickle(ARCHIVE_PICKLE_PATH)
-    to_be_archived = archive_pickle["to_be_archived"]
-    staging52 = archive_pickle["staging_52"]
+    archive_pickle: dict = read_or_new_pickle(ARCHIVE_PICKLE_PATH)
+    to_be_archived: list = archive_pickle["to_be_archived"]
+    staging52: list = archive_pickle["staging_52"]
 
-    today = dt.date.today()
+    today: dt.date = dt.date.today()
     logger.info(today)
 
     if today.day in [1, 15]:
@@ -122,7 +129,7 @@ if __name__ == "__main__":
                 project_52=PROJECT_52,
             )
 
-            find_projs_and_notify(
+            find_projects_and_notify(
                 archive_pickle,
                 today,
                 {},
@@ -138,7 +145,7 @@ if __name__ == "__main__":
             )
 
         else:
-            find_projs_and_notify(
+            find_projects_and_notify(
                 archive_pickle,
                 today,
                 {},

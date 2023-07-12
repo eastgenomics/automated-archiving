@@ -1,8 +1,6 @@
 import requests
 import json
 import datetime as dt
-from requests.adapters import HTTPAdapter
-from urllib3.util import Retry
 
 
 from bin.helper import get_logger
@@ -11,12 +9,22 @@ logger = get_logger(__name__)
 
 
 class SlackClass:
-    def __init__(self, token: str, months: int, debug: bool) -> None:
+    def __init__(
+        self,
+        token: str,
+        months: int,
+        debug: bool,
+    ) -> None:
         self.token = token
         self.months = months
         self.debug = debug
 
-    def _fetch_messages(self, purpose: str, today: str, **kwargs) -> str:
+    def _fetch_messages(
+        self,
+        purpose: str,
+        today: str,
+        **kwargs,
+    ) -> str:
         """
         Function to return the right message for the given purpose
 
@@ -41,13 +49,13 @@ class SlackClass:
             Slack message based on :param: purpose
         """
 
-        days_till_archiving = kwargs.get("days_till_archiving")
-        archiving_date = kwargs.get("archiving_date")
-        tar_period_start_date = kwargs.get("tar_period_start_date")
-        tar_period_end_date = kwargs.get("tar_period_end_date")
-        dnanexus_error = kwargs.get("dnanexus_error")
+        days_till_archiving: int = kwargs.get("days_till_archiving")
+        archiving_date: dt.datetime = kwargs.get("archiving_date")
+        tar_period_start_date: str = kwargs.get("tar_period_start_date")
+        tar_period_end_date: str = kwargs.get("tar_period_end_date")
+        dnanexus_error: str = kwargs.get("dnanexus_error")
 
-        msgs = {
+        msgs: dict[str, str] = {
             "002": (
                 f":bangbang: {today} *002 projects to be archived:*"
                 "\n_Please tag `no-archive` or `never-archive` "
@@ -136,24 +144,20 @@ class SlackClass:
                 error message from dnanexus login
         """
 
-        http = requests.Session()
-        retries = Retry(total=5, backoff_factor=10, method_whitelist=["POST"])
-        http.mount("https://", HTTPAdapter(max_retries=retries))
-
         if self.debug:
-            channel = "#egg-test"
+            channel: str = "#egg-test"
 
         logger.info(
-            f"POST request to channel: {channel} with purpose {purpose}"
+            f"POST request to channel: {channel} with purpose {purpose}",
         )
 
-        strtoday = today.strftime("%d/%m/%Y")
+        strtoday: str = today.strftime("%d/%m/%Y")
 
-        message = self._fetch_messages(purpose, strtoday, **kwargs)
+        message: str = self._fetch_messages(purpose, strtoday, **kwargs)
 
         try:
             if purpose in ["alert", "countdown"]:
-                response = http.post(
+                response = requests.post(
                     "https://slack.com/api/chat.postMessage",
                     {
                         "token": self.token,
@@ -172,7 +176,7 @@ class SlackClass:
                         f.write(f"{txt}\n")
 
                 tar_file = {"file": ("tar.txt", open("tar.txt", "rb"), "txt")}
-                response = http.post(
+                response = requests.post(
                     "https://slack.com/api/files.upload",
                     params={
                         "token": self.token,
@@ -190,13 +194,15 @@ class SlackClass:
 
                 # number above 7,995 seems to get truncation
                 if len(text_data) < 7995:
-                    response = http.post(
+                    response = requests.post(
                         "https://slack.com/api/chat.postMessage",
                         {
                             "token": self.token,
                             "channel": f"{channel}",
                             "attachments": json.dumps(
-                                [{"pretext": message, "text": text_data}]
+                                [
+                                    {"pretext": message, "text": text_data},
+                                ]
                             ),
                         },
                     ).json()
@@ -218,7 +224,9 @@ class SlackClass:
                             if end == len(data):
                                 chunks.append(data[start:end])
                         else:
-                            chunks.append(data[start : end - 1])
+                            chunks.append(
+                                data[start : end - 1],
+                            )
                             start = end - 1
 
                     logger.info(f"Sending data in {len(chunks)} chunks")
@@ -226,7 +234,7 @@ class SlackClass:
                     for chunk in chunks:
                         text_data = "\n".join(chunk)
 
-                        response = http.post(
+                        response = requests.post(
                             "https://slack.com/api/chat.postMessage",
                             {
                                 "token": self.token,

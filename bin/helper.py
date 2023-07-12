@@ -12,7 +12,7 @@ from logging.handlers import TimedRotatingFileHandler
 
 
 FORMATTER = logging.Formatter(
-    "%(asctime)s:%(name)s:%(module)s:%(levelname)s:::%(message)s"
+    "%(asctime)s:%(name)s:%(pathname)s:%(lineno)d:%(levelname)s:::%(message)s"
 )
 LOG_FILE = "/monitoring/automated-archiving.log"
 
