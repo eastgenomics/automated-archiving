@@ -103,7 +103,7 @@ if __name__ == "__main__":
     to_be_archived: list = archive_pickle["to_be_archived"]
     staging52: list = archive_pickle["staging_52"]
 
-    today: dt.date = dt.date(2023, 7, 1)  # determine overall script date
+    today: dt.date = dt.date.today()  # determine overall script date
     logger.info(today)
 
     if today.day in [1, 15]:
