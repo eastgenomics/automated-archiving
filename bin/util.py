@@ -356,7 +356,7 @@ def get_projects_and_directory_based_on_single_tag(
     staging_area_files = [
         file["describe"]["folder"].lstrip("/")
         for file in get_files_in_project_based_on_one_tag(
-            [tag],
+            tag,
             project_id,  # stagingarea-52 project id
         )
     ]

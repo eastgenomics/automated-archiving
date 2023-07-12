@@ -219,7 +219,7 @@ def directory_archive(
 
 
 def find_projects_and_notify(
-    archive_pickle: collections.defaultdict(list),
+    archive_pickle: dict,
     today: dt.datetime,
     status_dict: dict,
     month2: int,
@@ -252,9 +252,9 @@ def find_projects_and_notify(
     # which has been tagged 'no-archive' before but has not been modified
     # for X months. It will be listed under its own column in Slack msg
     # to make it more visible
-    special_notify_list = []
-    to_be_archived_list = collections.defaultdict(list)
-    to_be_archived_dir = []
+    special_notify_list: list[str] = []
+    to_be_archived_list: dict = collections.defaultdict(list)
+    to_be_archived_dir: list[str] = []
 
     # get all old enough projects
     old_enough_projects_dict = get_old_enough_projects(
@@ -281,13 +281,20 @@ def find_projects_and_notify(
     )
 
     if old_enough_projects_dict:
-        logger.info("Processing project")
+        logger.info("Processing projects...")
+
+        n: int = 0
 
         for proj_id, v in old_enough_projects_dict.items():
-            proj_name = v["describe"]["name"]
-            tags = [tag.lower() for tag in v["describe"]["tags"]]
-            trimmed_id = proj_id.lstrip("project-")
-            created_by = v["describe"]["createdBy"]["user"]
+            if n > 0 and n % 20 == 0:
+                logger.info(f"Processing {n}/{len(old_enough_projects_dict)} projects")
+
+            n += 1
+
+            proj_name: str = v["describe"]["name"]
+            tags: list[str] = [tag.lower() for tag in v["describe"]["tags"]]
+            trimmed_id: str = proj_id.lstrip("project-")
+            created_by: str = v["describe"]["createdBy"]["user"]
 
             if "never-archive" in tags:
                 continue
@@ -340,7 +347,7 @@ def find_projects_and_notify(
 
     # sieve through each directory in staging52
     if old_enough_directories:
-        logger.info("Processing directories")
+        logger.info("Processing directories...")
 
         # for building proj link
         trimmed_proj = project_52.lstrip("project-")
@@ -437,10 +444,10 @@ def find_projects_and_notify(
                 # in the directory have been archived thus we continue
                 continue
 
-    no_archive_list = get_projects_and_directory_based_on_single_tag(
+    no_archive_list: list[str] = get_projects_and_directory_based_on_single_tag(
         "no-archive", project_52
     )
-    never_archive_list = get_projects_and_directory_based_on_single_tag(
+    never_archive_list: list[str] = get_projects_and_directory_based_on_single_tag(
         "never-archive", project_52
     )
 
