@@ -1,0 +1,7 @@
+.env
+env
+__pycache__
+.vscode
+members.py
+*.pickle
+*.log
