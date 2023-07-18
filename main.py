@@ -48,11 +48,7 @@ if __name__ == "__main__":
 
         # project ids which require special attention
         BRAIN_PROJECTS: list = [
-            project_id.strip()
-            for project_id in os.environ.get(
-                "PROJECT_BRAIN",
-                [],
-            )
+            project_id.strip() for project_id in os.environ["PROJECT_BRAIN"]
         ]
 
         # inactivity month for special attention projects
@@ -116,13 +112,18 @@ if __name__ == "__main__":
     staging52: list = archive_pickle["staging_52"]
 
     today: dt.date = dt.date.today()  # determine overall script date
-    logger.info(today)
+    logger.info(f"Script datetime: {today}")
 
     if today.day in [1, 15]:
         dx_login(today, DNANEXUS_TOKEN, slack)
 
         if today.day == 1:
-            get_old_tar_and_notify(today, TAR_MONTH, slack, PROJECT_52)
+            get_old_tar_and_notify(
+                today,
+                TAR_MONTH,
+                slack,
+                PROJECT_52,
+            )
 
         # if there is something in memory
         # we run archive function
@@ -151,9 +152,10 @@ if __name__ == "__main__":
                 MEMBER_LIST,
                 ARCHIVE_PICKLE_PATH,
                 slack,
-                URL_PREFIX,
-                PROJECT_52,
-                PROJECT_53,
+                BRAIN_PROJECTS,
+                url_prefix=URL_PREFIX,
+                project_52=PROJECT_52,
+                project_53=PROJECT_53,
             )
 
         else:
@@ -167,9 +169,10 @@ if __name__ == "__main__":
                 MEMBER_LIST,
                 ARCHIVE_PICKLE_PATH,
                 slack,
-                URL_PREFIX,
-                PROJECT_52,
-                PROJECT_53,
+                BRAIN_PROJECTS,
+                url_prefix=URL_PREFIX,
+                project_52=PROJECT_52,
+                project_53=PROJECT_53,
             )
 
     else:
