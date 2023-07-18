@@ -46,6 +46,18 @@ if __name__ == "__main__":
             "project-FvbzbX84gG9Z3968BJjxYZ1k",
         )
 
+        # project ids which require special attention
+        BRAIN_PROJECTS: list = [
+            project_id.strip()
+            for project_id in os.environ.get(
+                "PROJECT_BRAIN",
+                [],
+            )
+        ]
+
+        # inactivity month for special attention projects
+        BRAIN_MONTH: int = int(os.environ.get("BRAIN_MONTH", 3))
+
         # inactivity weeks for 002 projects
         MONTH2: int = int(os.environ.get("AUTOMATED_MONTH_002", 6))
         # inactivity weeks for 003 projects

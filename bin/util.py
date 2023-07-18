@@ -3,7 +3,6 @@ import pickle
 import collections
 import datetime as dt
 from dateutil.relativedelta import relativedelta
-from typing import Union
 
 import dxpy as dx
 
@@ -388,13 +387,14 @@ def add_tag_to_project(tag: str, project_id: str) -> None:
                 "tags": [tag],
             },
         )
-    except dx.exceptions.ResourceNotFound as e:
+    except dx.exceptions.ResourceNotFound:
         logger.error(f"{project_id} not found when tagging")
-    except dx.exceptions.InvalidInput as e:
+    except dx.exceptions.InvalidInput:
         logger.error(f"invalid tag input when tagging {tag}")
-    except dx.exceptions.PermissionDenied as e:
+    except dx.exceptions.PermissionDenied:
         logger.error(f"permission denied when tagging {project_id}")
-    finally:
+    except Exception as e:
+        # no idea what's wrong
         logger.error(e)
 
 
@@ -406,13 +406,14 @@ def remove_tags_from_project(tags: list, project_id: str) -> None:
                 "tags": tags,
             },
         )
-    except dx.exceptions.ResourceNotFound as e:
+    except dx.exceptions.ResourceNotFound:
         logger.error(f"{project_id} not found when tagging")
-    except dx.exceptions.InvalidInput as e:
+    except dx.exceptions.InvalidInput:
         logger.error(f"invalid tag input when tagging {tags}")
-    except dx.exceptions.PermissionDenied as e:
+    except dx.exceptions.PermissionDenied:
         logger.error(f"permission denied when tagging {project_id}")
-    finally:
+    except Exception as e:
+        # no idea what's wrong
         logger.error(e)
 
 
