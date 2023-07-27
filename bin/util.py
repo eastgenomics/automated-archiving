@@ -3,7 +3,6 @@ import pickle
 import collections
 import datetime as dt
 from dateutil.relativedelta import relativedelta
-from typing import Union
 
 import dxpy as dx
 
@@ -157,8 +156,7 @@ def remove_project_tag(project_id: str) -> None:
             input_params={"tags": ["no-archive"]},
         )
     except Exception as e:
-        logger.error(f"REMOVE TAG: {project_id} failed")
-        logger.error(e)
+        logger.error(f"REMOVE TAG: {project_id} failed with error {e}")
 
 
 def get_projects_as_dict(project_type: str) -> dict:
@@ -207,8 +205,7 @@ def get_two_and_three_projects_as_single_dict() -> dict:
 def get_old_enough_projects(
     month2: int,
     month3: int,
-    project52: str,
-    project53: str,
+    project_ids_to_exclude: set,
 ) -> dict:
     """
     Function to get all 002 and 003 projects which are not modified
@@ -244,7 +241,7 @@ def get_old_enough_projects(
                 v["describe"]["modified"],
             )  # condition for 003
             and v["describe"]["dataUsage"] != v["describe"]["archivedDataUsage"]
-            and k not in [project52, project53]
+            and k not in project_ids_to_exclude
         )
     }
 
@@ -289,7 +286,11 @@ def get_all_directories_in_project(project_id: str) -> list:
         - original directory path (e.g. /210407_A01295_0010_AHWL5GDRXX/)
     """
 
-    dx_project = dx.DXProject(project_id)
+    try:
+        dx_project = dx.DXProject(project_id)
+    except Exception as e:
+        logger.error(e)  # probably wont happen but just in case
+        return []
 
     # filter out the /processed folder in root of staging-52
     directories_in_staging_area_52 = [
@@ -388,13 +389,14 @@ def add_tag_to_project(tag: str, project_id: str) -> None:
                 "tags": [tag],
             },
         )
-    except dx.exceptions.ResourceNotFound as e:
+    except dx.exceptions.ResourceNotFound:
         logger.error(f"{project_id} not found when tagging")
-    except dx.exceptions.InvalidInput as e:
+    except dx.exceptions.InvalidInput:
         logger.error(f"invalid tag input when tagging {tag}")
-    except dx.exceptions.PermissionDenied as e:
+    except dx.exceptions.PermissionDenied:
         logger.error(f"permission denied when tagging {project_id}")
-    finally:
+    except Exception as e:
+        # no idea what's wrong
         logger.error(e)
 
 
@@ -406,13 +408,14 @@ def remove_tags_from_project(tags: list, project_id: str) -> None:
                 "tags": tags,
             },
         )
-    except dx.exceptions.ResourceNotFound as e:
+    except dx.exceptions.ResourceNotFound:
         logger.error(f"{project_id} not found when tagging")
-    except dx.exceptions.InvalidInput as e:
+    except dx.exceptions.InvalidInput:
         logger.error(f"invalid tag input when tagging {tags}")
-    except dx.exceptions.PermissionDenied as e:
+    except dx.exceptions.PermissionDenied:
         logger.error(f"permission denied when tagging {project_id}")
-    finally:
+    except Exception as e:
+        # no idea what's wrong
         logger.error(e)
 
 
@@ -564,7 +567,11 @@ def get_old_tar_and_notify(
             name="^run.*.tar.gz",
             name_mode="regexp",
             describe={
-                "fields": {"modified": True, "folder": True, "name": True},
+                "fields": {
+                    "modified": True,
+                    "folder": True,
+                    "name": True,
+                },
             },
             project=project_52,
         )

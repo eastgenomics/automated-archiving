@@ -50,9 +50,9 @@ def get_next_archiving_date(today: dt.datetime) -> dt.datetime:
     return today
 
 
-def directory_archive(
-    dir_path: str,
-    proj_id: str,
+def archive_directory(
+    directory_path: str,
+    project_id: str,
     temp_dict: dict,
     archived_modified_month: int,
     regex_excludes: list,
@@ -86,14 +86,15 @@ def directory_archive(
     # check for 'never-archive' tag in directory
     never_archive = list(
         dx.find_data_objects(
-            project=proj_id,
-            folder=dir_path,
+            project=project_id,
+            folder=directory_path,
             tags=["never-archive"],
+            limit=1,
         )
     )
 
     if never_archive:
-        logger.info(f"NEVER ARCHIVE: {dir_path} in staging52")
+        logger.info(f"NEVER ARCHIVE: {directory_path} in staging52")
         return
 
     # 2 * 4 week = 8 weeks
@@ -102,25 +103,29 @@ def directory_archive(
     # check if there's any files modified in the last num_weeks
     recent_modified = list(
         dx.find_data_objects(
-            project=proj_id, folder=dir_path, modified_after=f"-{num_weeks}w"
+            project=project_id,
+            folder=directory_path,
+            modified_after=f"-{num_weeks}w",
+            limit=1,
         )
     )
 
     if recent_modified:
-        logger.info(f"RECENTLY MODIFIED: {dir_path} in staging52")
+        logger.info(f"RECENTLY MODIFIED: {directory_path} in staging52")
         return
 
     # check for 'no-archive' tag in directory
     no_archive = list(
         dx.find_data_objects(
-            project=proj_id,
-            folder=dir_path,
+            project=project_id,
+            folder=directory_path,
             tags=["no-archive"],
+            limit=1,
         )
     )
 
     if no_archive:
-        logger.info(f"NO ARCHIVE: {dir_path} in staging52")
+        logger.info(f"NO ARCHIVE: {directory_path} in staging52")
         return
     else:
         # if directory in staging52 got
@@ -137,8 +142,8 @@ def directory_archive(
                         dx.find_data_objects(
                             name=word,
                             name_mode="regexp",
-                            project=proj_id,
-                            folder=dir_path,
+                            project=project_id,
+                            folder=directory_path,
                         )
                     )
                 ]
@@ -152,8 +157,8 @@ def directory_archive(
                 file["id"]
                 for file in list(
                     dx.find_data_objects(
-                        project=proj_id,
-                        folder=dir_path,
+                        project=project_id,
+                        folder=directory_path,
                     )
                 )
             ]
@@ -163,16 +168,16 @@ def directory_archive(
                 for file_id in file_ids:
                     if file_id in file_ids_to_exclude:
                         continue
-                    try:
-                        dx.DXFile(file_id, project=proj_id).archive()
-                        archived_file_count += 1
-                    except Exception as error:
-                        logger.error(error)
-                        failed_archive.append(f"{proj_id}:{file_id}")
+                    archive_file(
+                        file_id,
+                        project_id,
+                        archived_file_count,
+                        failed_archive,
+                    )
 
                 if archived_file_count > 0:
                     temp_dict["archived"].append(
-                        f"{proj_id}:{dir_path}: {archived_file_count}"
+                        f"{project_id}:{directory_path} | {archived_file_count}"
                     )
         else:
             # no file-id match exclude regex
@@ -180,41 +185,41 @@ def directory_archive(
             if not debug:  # running in production
                 try:
                     res = dx.api.project_archive(
-                        proj_id, input_params={"folder": dir_path}
+                        project_id, input_params={"folder": directory_path}
                     )
                     if res["count"] != 0:
                         temp_dict["archived"].append(
-                            f"{proj_id}:{dir_path}:{res['count']}"
+                            f"{project_id}:{directory_path} | {res['count']}"
                         )
-                except Exception:
+                except Exception as _:
                     logger.info(
-                        f"Archiving {proj_id}:{dir_path} file by file because"
-                        " dx.Project.archive failed"
+                        f"Archiving {project_id}:{directory_path} file by file"
+                        " because dx.project.archive failed"
                     )
 
                     file_ids = [
                         file["id"]
                         for file in list(
                             dx.find_data_objects(
-                                project=proj_id,
+                                project=project_id,
                                 classname="file",
-                                folder=dir_path,
+                                folder=directory_path,
                             )
                         )
                     ]
 
                     archived_file_count = 0
                     for file_id in file_ids:
-                        try:
-                            dx.DXFile(file_id, project=proj_id).archive()
-                            archived_file_count += 1
-                        except Exception as er:
-                            logger.error(er)
-                            failed_archive.append(f"{proj_id}:{file_id}")
+                        archive_file(
+                            file_id,
+                            project_id,
+                            archived_file_count,
+                            failed_archive,
+                        )
 
                     if archived_file_count > 0:
                         temp_dict["archived"].append(
-                            f"{proj_id}:{dir_path}:{archived_file_count}"
+                            f"{project_id}:{directory_path} | {archived_file_count}"
                         )
 
 
@@ -228,6 +233,7 @@ def find_projects_and_notify(
     members: dict,
     archive_pickle_path: str,
     slack: SlackClass,
+    brain_projects: list,
     url_prefix: str = "https://platform.dnanexus.com/panx/projects",
     project_52: str = "project-FpVG0G84X7kzq58g19vF1YJQ",
     project_53: str = "project-FvbzbX84gG9Z3968BJjxYZ1k",
@@ -253,20 +259,28 @@ def find_projects_and_notify(
     # for X months. It will be listed under its own column in Slack msg
     # to make it more visible
     special_notify_list: list[str] = []
+
+    # store to-be-archived projects
     to_be_archived_list: dict = collections.defaultdict(list)
+
+    # store to-be-archived directory in stagingarea52
     to_be_archived_dir: list[str] = []
+
+    project_ids_to_exclude = set(brain_projects + [project_52, project_53])
 
     # get all old enough projects
     old_enough_projects_dict = get_old_enough_projects(
-        month2, month3, project_52, project_53
+        month2,
+        month3,
+        project_ids_to_exclude,
     )
 
-    logger.info(f"No. of old enough projects: {len(old_enough_projects_dict)}")
+    logger.info(f"Number of old enough projects: {len(old_enough_projects_dict)}")
 
     # get all directories in staging-52
     all_directories = get_all_directories_in_project(project_52)
 
-    logger.info(f"Processing {len(all_directories)} directories in staging52")
+    logger.info(f"Processing {len(all_directories)} directories in stagingA52")
 
     # check if directories have 002 projs made and 002 has not been modified
     # in the last X month
@@ -277,7 +291,7 @@ def find_projects_and_notify(
     ]
 
     logger.info(
-        f"No. of old enough directories: {len(old_enough_directories)}",
+        f"Number of old enough directories: {len(old_enough_directories)}",
     )
 
     if old_enough_projects_dict:
@@ -287,16 +301,19 @@ def find_projects_and_notify(
 
         for proj_id, v in old_enough_projects_dict.items():
             if n > 0 and n % 20 == 0:
-                logger.info(f"Processing {n}/{len(old_enough_projects_dict)} projects")
+                logger.info(
+                    f"Processing {n}/{len(old_enough_projects_dict)} projects",
+                )
 
             n += 1
 
-            proj_name: str = v["describe"]["name"]
+            project_name: str = v["describe"]["name"]
             tags: list[str] = [tag.lower() for tag in v["describe"]["tags"]]
             trimmed_id: str = proj_id.lstrip("project-")
             created_by: str = v["describe"]["createdBy"]["user"]
 
             if "never-archive" in tags:
+                # project tagged with 'never-archive'
                 continue
 
             if proj_id in status_dict.keys():
@@ -328,20 +345,20 @@ def find_projects_and_notify(
                     # list it in special-notify list
                     remove_project_tag(proj_id)
 
-                special_notify_list.append(proj_name)
+                special_notify_list.append(project_name)
 
             # add project-id to to-be-archived list in memory
             archive_pickle["to_be_archived"].append(proj_id)
 
-            if proj_name.startswith("002"):
+            if project_name.startswith("002"):
                 to_be_archived_list["002"].append(
-                    f"<{url_prefix}/{trimmed_id}/|{proj_name}>"
+                    f"<{url_prefix}/{trimmed_id}/|{project_name}>"
                 )
             else:
                 to_be_archived_list["003"].append(
                     {
                         "user": created_by,
-                        "link": f"<{url_prefix}/{trimmed_id}/|{proj_name}>",
+                        "link": f"<{url_prefix}/{trimmed_id}/|{project_name}>",
                     }
                 )
 
@@ -353,7 +370,7 @@ def find_projects_and_notify(
         trimmed_proj = project_52.lstrip("project-")
 
         for _, original_dir in old_enough_directories:
-            trimmed_dir = original_dir.lstrip("/")
+            trimmed_dir: str = original_dir.lstrip("/")
 
             # get all the files within that directory in staging-52
             all_files = list(
@@ -368,7 +385,7 @@ def find_projects_and_notify(
             # get all files' archivalStatus
             status = set([x["describe"]["archivalState"] for x in all_files])
 
-            # if there're files in dir with 'live' status
+            # if there're files in directory with 'live' status
             if "live" in status:
                 # if there's 'never-archive' tag in any file, continue
                 never_archive = list(
@@ -407,28 +424,22 @@ def find_projects_and_notify(
                     # when tagged, modified date will change
                     # if modified date > x month, we know the tag was
                     # probably there for quite a while
-                    # if all tagged files have modified date > x month
-                    # we remove tags and list dir for archiving
+                    # if all files have modified date > x month
+                    # we remove tags and list directory for archiving
                     if all(
                         [
                             older_than(month2, f["describe"]["modified"])
                             for f in no_archive
                         ]
                     ):
-                        logger.info(
-                            "REMOVE TAG: removing tag                        "
-                            f"         for {len(no_archive)} file(s)"
-                        )
+                        # if all files within the directory are older than
+                        # x month
+                        logger.info(f"Removing tag for {len(no_archive)} files")
 
                         if not debug:
                             for file in no_archive:
-                                dx.api.file_remove_tags(
-                                    file["id"],
-                                    input_params={
-                                        "tags": ["no-archive"],
-                                        "project": project_52,
-                                    },
-                                )
+                                remove_tag_from_file(file["id"], project_52)
+
                         special_notify_list.append(
                             f"{original_dir} in `staging52`",
                         )
@@ -437,17 +448,19 @@ def find_projects_and_notify(
                             f"<{STAGING_PREFIX}/{trimmed_dir}|{original_dir}>"
                         )
                     else:
-                        logger.info(f"SKIPPED: {original_dir} in staging52")
+                        logger.info(
+                            f"SKIPPED: {original_dir} in stagingarea52",
+                        )
                         continue
             else:
                 # no 'live' status means all files
                 # in the directory have been archived thus we continue
                 continue
 
-    no_archive_list: list[str] = get_projects_and_directory_based_on_single_tag(
+    no_archive_list: list = get_projects_and_directory_based_on_single_tag(
         "no-archive", project_52
     )
-    never_archive_list: list[str] = get_projects_and_directory_based_on_single_tag(
+    never_archive_list: list = get_projects_and_directory_based_on_single_tag(
         "never-archive", project_52
     )
 
@@ -458,7 +471,7 @@ def find_projects_and_notify(
     no_archive_list = sorted(no_archive_list)
     never_archive_list = sorted(never_archive_list)
 
-    # process 003 list to sort by user
+    # process 003 list to sort by user in Slack notification
     temp003 = to_be_archived_list["003"]
     if temp003:
         temp003 = sorted(temp003, key=lambda d: d["user"])
@@ -474,6 +487,7 @@ def find_projects_and_notify(
                     proj003.append(f"Can't find ID for: {current_usr}")
 
             proj003.append(link["link"])
+    # end processing 003 list
 
     big_list = [
         ("002", proj002),
@@ -505,6 +519,64 @@ def find_projects_and_notify(
             pickle.dump(archive_pickle, f)
 
     logger.info("End of finding projs and notify")
+
+
+def archive_file(
+    file_id: str,
+    project_id: str,
+    count: int,
+    failed_record: list,
+) -> None:
+    """
+    Function to archive file-id on DNAnexus
+
+    Parameters:
+        file_id: file-id to be archived
+        project_id: project-id where the file is in
+        count: counter to keep track of how many files have been archived
+        failed_record: list to record file-id that failed archiving
+    """
+    try:
+        dx.DXFile(
+            file_id,
+            project=project_id,
+        ).archive()
+        count += 1
+
+    # catching DNAnexus-related errors
+    except (
+        dx.exceptions.ResourceNotFound,
+        dx.exceptions.PermissionDenied,
+        dx.exceptions.InvalidInput,
+        dx.exceptions.InvalidState,
+    ) as e:
+        logger.error(f"Archiving file error (DNAnexus): {e}")
+        failed_record.append(f"{project_id}:{file_id}")
+    # non-DNAnexus related errors
+    except Exception as e:
+        logger.error(f"Archiving file error (Unknown): {e}")
+        failed_record.append(f"{project_id}:{file_id}")
+
+
+def remove_tag_from_file(file_id: str, project_id: str) -> None:
+    try:
+        dx.api.file_remove_tags(
+            file_id,
+            input_params={
+                "tags": ["no-archive"],
+                "project": project_id,
+            },
+        )
+    # catching DNAnexus-related errors
+    except (
+        dx.exceptions.ResourceNotFound,
+        dx.exceptions.PermissionDenied,
+        dx.exceptions.InvalidInput,
+    ) as e:
+        logger.error(f"Tag file error (DNAnexus): {e}")
+    # non-DNAnexus related errors
+    except Exception as e:
+        logger.error(f"Archiving file error (Unknown): {e}")
 
 
 def archiving_function(
@@ -556,9 +628,9 @@ def archiving_function(
 
     if list_of_projects_in_memory:
         # loop through each project
-        for proj_id in list_of_projects_in_memory:
+        for project_id in list_of_projects_in_memory:
             try:
-                project = dx.DXProject(proj_id)
+                project = dx.DXProject(project_id)
 
                 # query latest project detail on archiving time
                 detail = project.describe()
@@ -566,10 +638,15 @@ def archiving_function(
                 # if project-id no longer exist on DNAnexus
                 # probably project got deleted or etc.
                 # causing this part to fail
-                logger.info(f"{proj_id} seems to have been deleted" f"{e}")
+                logger.info(f"{project_id} seems to have been deleted" f"{e}")
+                continue
+            except Exception as e:
+                # no idea what kind of exception DNAnexus will give
+                # log and move on
+                logger.error(e)
                 continue
 
-            proj_name: str = detail["name"]
+            project_name: str = detail["name"]
             modified_epoch = detail["modified"]
             tags = detail["tags"]
 
@@ -606,7 +683,7 @@ def archiving_function(
                                 dx.find_data_objects(
                                     name=word,
                                     name_mode="regexp",
-                                    project=proj_id,
+                                    project=project_id,
                                     classname="file",
                                 )
                             )
@@ -617,10 +694,13 @@ def archiving_function(
                 file_ids = [
                     file["id"]
                     for file in list(
-                        dx.find_data_objects(project=proj_id, classname="file")
+                        dx.find_data_objects(
+                            project=project_id,
+                            classname="file",
+                        )
                     )
                 ]
-                archived_file_count = 0
+                archived_file_count: int = 0
 
                 if file_id_to_exclude:
                     # if there is file-id that match exclude regex
@@ -629,16 +709,16 @@ def archiving_function(
                             # if file-id match file-id in exclude list, skip
                             if file_id in file_id_to_exclude:
                                 continue
-                            try:
-                                dx.DXFile(file_id, project=proj_id).archive()
-                                archived_file_count += 1
-                            except Exception as archiving_error:
-                                logger.error(archiving_error)
-                                failed_archive.append(f"{proj_id}:{file_id}")
+                            archive_file(
+                                file_id,
+                                project_id,
+                                archived_file_count,
+                                failed_archive,
+                            )
 
                         if archived_file_count > 0:
                             temp_archived["archived"].append(
-                                f"{proj_name} {proj_id} {archived_file_count}"
+                                f"{project_id} | {project_name} | {archived_file_count}"
                             )
                 else:
                     # if no file-id match the regex
@@ -646,13 +726,13 @@ def archiving_function(
                     if not debug:  # running in production
                         try:
                             res = dx.api.project_archive(
-                                proj_id, input_params={"folder": "/"}
+                                project_id, input_params={"folder": "/"}
                             )
                             if res["count"] != 0:
                                 temp_archived["archived"].append(
-                                    f"{proj_name} {proj_id} {res['count']}"
+                                    f"{project_id} | {project_name} | {res['count']}"
                                 )
-                        except Exception:
+                        except Exception as _:
                             # this normally happens when there are applet or
                             # record file type
                             # in project in which DNAnexus API for some reason
@@ -664,8 +744,8 @@ def archiving_function(
                             # dx.File.archive
                             # individually as a workaround
                             logger.info(
-                                f"Archiving {proj_id} file by file because"
-                                " dx.Project.archive failed"
+                                f"Archiving {project_id} file by file because"
+                                " dx.project.archive failed"
                             )
 
                             # get all files in project and do it individually
@@ -673,7 +753,8 @@ def archiving_function(
                                 file["id"]
                                 for file in list(
                                     dx.find_data_objects(
-                                        project=proj_id, classname="file"
+                                        project=project_id,
+                                        classname="file",
                                     )
                                 )
                             ]
@@ -681,29 +762,27 @@ def archiving_function(
                             archived_file_count = 0
 
                             for file_id in file_ids:
-                                try:
-                                    dx.DXFile(
-                                        file_id,
-                                        project=proj_id,
-                                    ).archive()
-                                    archived_file_count += 1
-                                except Exception as e:
-                                    logger.error(e)
-                                    failed_archive.append(f"{proj_id}:{file_id}")
+                                archive_file(
+                                    file_id,
+                                    project_id,
+                                    archived_file_count,
+                                    failed_archive,
+                                )
 
                             if archived_file_count > 0:
                                 temp_archived["archived"].append(
-                                    f"{proj_name} {proj_id} {archived_file_count}"
+                                    f"{project_id} | {project_name} | {archived_file_count}"
                                 )
             else:
                 # project not older than ARCHIVE_MODIFIED_MONTH
                 # meaning project has been modified recently, so skip
-                logger.info(f"RECENTLY MODIFIED: {proj_name}")
+                logger.info(f"RECENTLY MODIFIED: {project_name}")
                 continue
 
     if list_of_directories_in_memory:
+        # directories in to-be-archived list in stagingarea52
         for directory in list_of_directories_in_memory:
-            directory_archive(
+            archive_directory(
                 directory,
                 project_52,
                 temp_archived,
