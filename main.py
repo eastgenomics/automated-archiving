@@ -3,15 +3,12 @@ import datetime as dt
 
 from bin.helper import get_logger
 from bin.slack import SlackClass
+from bin.archive import ArchiveClass
 from bin.util import (
     read_or_new_pickle,
     dx_login,
     get_old_tar_and_notify,
-)
-from bin.archiving import (
-    archiving_function,
-    find_projects_and_notify,
-    get_next_archiving_date,
+    tagging_function,
 )
 
 
@@ -19,7 +16,7 @@ from member.members import MEMBER_LIST
 
 logger = get_logger(__name__)
 
-URL_PREFIX: str = "https://platform.dnanexus.com/panx/projects"
+DNANEXUS_URL_PREFIX: str = "https://platform.dnanexus.com/panx/projects"
 
 
 if __name__ == "__main__":
@@ -47,19 +44,29 @@ if __name__ == "__main__":
         )
 
         # project ids which require special attention
-        BRAIN_PROJECTS: list = [
-            project_id.strip() for project_id in os.environ["PROJECT_BRAIN"]
+        PRECISION_ARCHIVING_PROJECTS: list = [
+            project_id.strip()
+            for project_id in os.environ["PRECISION_ARCHIVING"].split(",")
+            if os.environ.get("PRECISION_ARCHIVING")
         ]
 
         # inactivity month for special attention projects
-        BRAIN_MONTH: int = int(os.environ.get("BRAIN_MONTH", 3))
+        PRECISION_MONTH: int = int(os.environ.get("PRECISION_MONTH", 1))
 
-        # inactivity weeks for 002 projects
-        MONTH2: int = int(os.environ.get("AUTOMATED_MONTH_002", 6))
-        # inactivity weeks for 003 projects
-        MONTH3: int = int(os.environ.get("AUTOMATED_MONTH_003", 3))
-        # inactivity weeks for .tar files in staging52
+        logger.info(
+            f"Precision archiving projects: {', '.join(PRECISION_ARCHIVING_PROJECTS)} with inactivity month set to {PRECISION_MONTH}"
+        )
+
+        # inactivity period for 002 projects in MONTH
+        MONTH2: int = int(os.environ.get("AUTOMATED_MONTH_002", 3))
+        # inactivity period for 003 projects in MONTH
+        MONTH3: int = int(os.environ.get("AUTOMATED_MONTH_003", 1))
+        # inactivity period for .tar files in staging52 in MONTH
         TAR_MONTH: int = int(os.environ.get("TAR_MONTH", 3))
+
+        logger.info(
+            f"Inactivity variable (months): 002={MONTH2}, 003={MONTH3}, tar={TAR_MONTH}"
+        )
 
         # grace period
         ARCHIVE_MODIFIED_MONTH: int = int(
@@ -92,6 +99,8 @@ if __name__ == "__main__":
             if text.strip()
         ]
 
+        logger.info(f"File regex exclude: {', '.join(AUTOMATED_REGEX_EXCLUDE)}")
+
     except KeyError as missing_env:
         logger.error(f"env {missing_env} cannot be found in config file")
 
@@ -106,13 +115,35 @@ if __name__ == "__main__":
         ARCHIVE_FAILED_PATH = "/monitoring/failed_archive.test.txt"
         ARCHIVED_TXT_PATH = "/monitoring/archived.test.txt"
 
+    logger.info(f"Archive pickle path: {ARCHIVE_PICKLE_PATH}")
+    logger.info(f"Archive failed path: {ARCHIVE_FAILED_PATH}")
+    logger.info(f"Archived .txt path: {ARCHIVED_TXT_PATH}")
+
     # read pickle memory
     archive_pickle: dict = read_or_new_pickle(ARCHIVE_PICKLE_PATH)
     to_be_archived: list = archive_pickle["to_be_archived"]
     staging52: list = archive_pickle["staging_52"]
 
-    today: dt.date = dt.date.today()  # determine overall script date
-    logger.info(f"Script datetime: {today}")
+    today: dt.date = dt.date(2023, 8, 1)  # determine overall script date
+    logger.info(f"datetime: {today}")
+
+    archive_class = ArchiveClass(
+        DEBUG,
+        today,
+        ARCHIVE_MODIFIED_MONTH,
+        MONTH2,
+        MONTH3,
+        AUTOMATED_REGEX_EXCLUDE,
+        PROJECT_52,
+        PROJECT_53,
+        ARCHIVE_PICKLE_PATH,
+        ARCHIVE_FAILED_PATH,
+        ARCHIVED_TXT_PATH,
+        MEMBER_LIST,
+        DNANEXUS_URL_PREFIX,
+        PRECISION_ARCHIVING_PROJECTS,
+        slack,
+    )
 
     if today.day in [1, 15]:
         dx_login(today, DNANEXUS_TOKEN, slack)
@@ -123,57 +154,21 @@ if __name__ == "__main__":
                 TAR_MONTH,
                 slack,
                 PROJECT_52,
+                DEBUG,
             )
 
         # if there is something in memory
         # we run archive function
         # else we find_and_notify
         if to_be_archived or staging52:
-            archiving_function(
-                archive_pickle=archive_pickle,
-                today=today,
-                regex_excludes=AUTOMATED_REGEX_EXCLUDE,
-                debug=DEBUG,
-                archived_modified_month=ARCHIVE_MODIFIED_MONTH,
-                archived_txt_path=ARCHIVED_TXT_PATH,
-                archived_pickle_path=ARCHIVE_PICKLE_PATH,
-                archived_failed_path=ARCHIVE_FAILED_PATH,
-                slack=slack,
-                project_52=PROJECT_52,
-            )
+            archive_class.archiving_function(archive_pickle)
 
-            find_projects_and_notify(
-                archive_pickle,
-                today,
-                {},
-                MONTH2,
-                MONTH3,
-                DEBUG,
-                MEMBER_LIST,
-                ARCHIVE_PICKLE_PATH,
-                slack,
-                BRAIN_PROJECTS,
-                url_prefix=URL_PREFIX,
-                project_52=PROJECT_52,
-                project_53=PROJECT_53,
-            )
+            tagging_function(DEBUG)
+
+            archive_class.find_projects_and_notify(archive_pickle, {})
 
         else:
-            find_projects_and_notify(
-                archive_pickle,
-                today,
-                {},
-                MONTH2,
-                MONTH3,
-                DEBUG,
-                MEMBER_LIST,
-                ARCHIVE_PICKLE_PATH,
-                slack,
-                BRAIN_PROJECTS,
-                url_prefix=URL_PREFIX,
-                project_52=PROJECT_52,
-                project_53=PROJECT_53,
-            )
+            archive_class.find_projects_and_notify(archive_pickle, {})
 
     else:
         if to_be_archived or staging52:
@@ -181,7 +176,9 @@ if __name__ == "__main__":
             # we do the countdown to egg-alerts
             # else we just keep silence
 
-            next_archiving_date = get_next_archiving_date(today)
+            next_archiving_date = (
+                archive_class.get_next_archiving_date_relative_to_today(today)
+            )
             diff = next_archiving_date - today
 
             slack.post_message_to_slack(

@@ -107,7 +107,7 @@ class SlackClass:
             ),
             "archived": ":closed_book: *Projects or directory archived:*",
             "countdown": (
-                "automated-archiving: "
+                ":redalert: automated-archiving: "
                 f"{days_till_archiving} day till archiving on {archiving_date}"
             ),
             "alert": (

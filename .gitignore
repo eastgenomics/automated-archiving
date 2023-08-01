@@ -5,3 +5,4 @@ __pycache__
 members.py
 *.pickle
 *.log
+*.log.*
