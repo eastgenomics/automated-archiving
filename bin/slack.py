@@ -164,7 +164,7 @@ class SlackClass:
         """
 
         if self.debug:
-            channel: str = "U02HPRQ9X7Z"
+            channel: str = "#egg-test"
 
         logger.info(
             f"POST request to channel: {channel} with purpose {purpose}",

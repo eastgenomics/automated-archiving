@@ -45,7 +45,7 @@ if __name__ == "__main__":
             "project-FvbzbX84gG9Z3968BJjxYZ1k",
         )
 
-        # project ids which require special attention
+        # list of project ids which require special attention
         PRECISION_ARCHIVING_PROJECTS: list = (
             [
                 project_id.strip()
@@ -53,16 +53,11 @@ if __name__ == "__main__":
             ]
             if (
                 os.environ.get("PRECISION_ARCHIVING")  # have value in env
-                and ","
-                in os.environ.get(
-                    "PRECISION_ARCHIVING"
-                )  # have commas e.g. two or three projects
-            )
-            else (
-                [os.environ.get("PRECISION_ARCHIVING")]  # single project
-                if os.environ.get("PRECISION_ARCHIVING")
-                else []  # no project specified
-            )
+                and "," in os.environ.get("PRECISION_ARCHIVING")
+            )  # have commas e.g. two or three projects
+            else [os.environ.get("PRECISION_ARCHIVING")]  # single project
+            if os.environ.get("PRECISION_ARCHIVING")
+            else []  # no project specified
         )
 
         # inactivity month for special attention projects
@@ -214,7 +209,6 @@ if __name__ == "__main__":
                 days_till_archiving=period_difference.days,
                 archiving_date=next_archiving_date,
             )
-            pass
         else:
             logger.info("No data in memory")
 

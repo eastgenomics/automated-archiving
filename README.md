@@ -1,5 +1,7 @@
 # Automated Archiving
 
+#### python v3.8.17
+
 ## What does the script do
 Check for 002, 003 projects and directories in staging52 which are not modified for the last X months (inactive). Compile all archivable into a list and send Slack notification to notify all to-be-archived files in the next run. 
 
