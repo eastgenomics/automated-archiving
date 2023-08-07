@@ -71,19 +71,19 @@ class SlackClass:
 
         msgs: dict[str, str] = {
             "002": (
-                f":bangbang: {today} *002 projects to be archived:*"
+                f":redalert: {today} *002 projects to be archived:*"
                 "\n_Please tag `no-archive` or `never-archive` "
                 "in project.Settings.Tags_"
                 f"\n*Archive date: {archiving_date}*"
             ),
             "003": (
-                f":bangbang: {today} *003 projects to be archived:*"
+                f":redalert: {today} *003 projects to be archived:*"
                 "\n_Please tag `no-archive` or `never-archive` "
                 "in project.Settings.Tags_"
                 f"\n*Archive date: {archiving_date}*"
             ),
             "staging52": (
-                f":bangbang: {today} "
+                f":redalert: {today} "
                 "*Directories in `staging52` to be archived:*"
                 "\n_Please tag `no-archive` or `never-archive` "
                 "in on any file within the directory_"
@@ -121,9 +121,14 @@ class SlackClass:
                 f" {tar_period_end_date}\n_Please find complete list of"
                 " file-id below:_"
             ),
+            "precision": (
+                ":redalert: automated-archiving: "
+                f"Folders to be archived in `precision` projects"
+                f"\n*Archive date: {archiving_date}*"
+            ),
         }
 
-        return msgs[purpose]
+        return msgs.get(purpose, "No message found")
 
     def post_message_to_slack(
         self,

@@ -37,7 +37,7 @@ def read_or_new_pickle(path: str) -> dict:
     return pickle_dict
 
 
-def _older_than(month: int, modified_epoch: int) -> bool:
+def older_than(month: int, modified_epoch: int) -> bool:
     """
     Determine if a modified epoch date is older than X month
 
@@ -50,10 +50,26 @@ def _older_than(month: int, modified_epoch: int) -> bool:
         - `False` if have been modified in last X month
     """
 
-    modified = modified_epoch / 1000.0
-    date = dt.datetime.fromtimestamp(modified)
+    return (
+        _make_datetime_format(modified_epoch) + relativedelta(months=+month)
+        < dt.datetime.today()
+    )
 
-    return date + relativedelta(months=+month) < dt.datetime.today()
+
+def write_to_pickle(path: str, pickle_dict: dict) -> None:
+    """
+    Write to memory pickle
+
+    Parameters:
+    :param: path: directory path to pickle
+    :param: pickle_dict: `dict` to write into pickle
+
+    Returns:
+        `None`
+    """
+    logger.info(f"Writing into pickle file at: {path}")
+    with open(path, "wb") as f:
+        pickle.dump(pickle_dict, f)
 
 
 def dx_login(today: dt.datetime, token: str, slack: SlackClass) -> None:
@@ -350,7 +366,7 @@ def get_old_tar_and_notify(
 
     # list of tar files not modified in the last 3 months
     filtered_result = [
-        x for x in result if _older_than(tar_month, x["describe"]["modified"])
+        x for x in result if older_than(tar_month, x["describe"]["modified"])
     ]
 
     if not filtered_result:
