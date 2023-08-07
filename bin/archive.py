@@ -233,34 +233,6 @@ class ArchiveClass:
             logger.error(e)  # probably wont happen but just in case
             return []
 
-        # def _get_all_directories_in_project(self, project_id: str) -> list:
-        """
-        Function to get all directories in a project-id
-
-        Parameters:
-        :param: project_id: DNAnexus project-id
-
-        Return:
-        list of tuple for ease of processing later on
-        tuple contains:
-            - trimmed directory name (e.g. 210407_A01295_0010_AHWL5GDRXX)
-                for 002 querying later on
-            - original directory path (e.g. /210407_A01295_0010_AHWL5GDRXX/)
-        """
-
-        # need to do this twice in root and in /processed
-        # because that's how staging-52 is structured
-        return [
-            (file.lstrip("/").lstrip("/processed"), file)
-            for file in self._get_folders_in_project(project_id)
-            if file != "/processed"  # directories in root of staging-52
-        ] + [
-            (file.lstrip("/").lstrip("/processed"), file)
-            for file in self._get_folders_in_project(
-                project_id, directory_path="/processed"
-            )  # directories in /processed folder
-        ]
-
     def _get_projects_as_dict(self, project_type: str) -> dict:
         """
         Function to fetch certain project type and return as
