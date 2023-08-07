@@ -20,10 +20,10 @@ The `.py` file should have a `MEMBER_LIST` (dict) which contain key `DNANexus Us
 
 ## Script Workflow
 1. Check today's date.
-2. If it's 1st or 15th, it checks for files in memory (tar.gz function only runs on 1st of each month).
-3. If not 1st or 15th, it sends a countdown message to Slack
-4. If there're files in memory, proceed with `archiving_function`
-5. If nothing in memory, proceed with `find_proj_and_notify function`
+2. If 1st or 15th, checks for to-be-archived projects in memory 
+    - if yes, run archiving, then run `find_projects` & `find_precision_projects`
+    - if no, run `find_projects` & `find_precision_projects`
+3. If not 1st or 15th, sends countdown message to Slack
 
 ![script workflow](demo/script_workflow_updated.png)
 
@@ -50,6 +50,7 @@ The `.py` file should have a `MEMBER_LIST` (dict) which contain key `DNANexus Us
 - `ARCHIVE_MODIFIED_MONTH`: period (in months) to determine whether to skip archiving if project or file is modified within this month (e.g. 1)
 - `ARCHIVE_DEBUG`: env to comment out actionable codes (e.g. tag file, remove file tag, archive)
 - `AUTOMATED_REGEX_EXCLUDE`: comma-separated regex word e.g. megaqc.json,some-filename\..*,^megapc.csv
+- `PRECISION_ARCHIVING`: comma separated project-id that need specific archiving (folder by folder archiving)
 #### slack
 - `SLACK_TOKEN` : Slack Bot API Token
 
