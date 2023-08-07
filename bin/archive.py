@@ -5,6 +5,7 @@ import datetime as dt
 import dxpy as dx
 from dateutil.relativedelta import relativedelta
 
+from bin.util import older_than
 from bin.slack import SlackClass
 from bin.helper import get_logger
 
@@ -28,6 +29,7 @@ class ArchiveClass:
         members: dict,
         dnanexus_url_prefix: str,
         precision_projects: list,
+        precision_month: int,
         slack: SlackClass,
     ):
         self.debug = debug
@@ -44,6 +46,7 @@ class ArchiveClass:
         self.members = members
         self.dnanexus_url_prefix = dnanexus_url_prefix
         self.precision_projects = precision_projects
+        self.precision_month = precision_month
         self.slack = slack
 
     def _get_files_in_project_based_on_one_tag(self, tag: str, project_id: str) -> list:
@@ -412,8 +415,8 @@ class ArchiveClass:
         self,
         file_id: str,
         project_id: str,
-        count: int,
-        failed_record: list,
+        count: int = 0,
+        failed_record: list = [],
     ) -> None:
         """
         Function to archive file-id on DNAnexus
@@ -560,6 +563,8 @@ class ArchiveClass:
                         temp_dict["archived"].append(
                             f"{self.project_52}:{directory_path} | {archived_file_count}"
                         )
+                else:
+                    logger.info("Running in debug mode. Skipping archiving")
             else:
                 # no file-id match exclude regex
                 # we do an overall dx.Project.archive
@@ -605,12 +610,15 @@ class ArchiveClass:
                             temp_dict["archived"].append(
                                 f"{self.project_52}:{directory_path} | {archived_file_count}"
                             )
+                else:
+                    logger.info("Running in debug mode. Skipping archiving")
 
-    def find_projects_and_notify(
+    def find_projects(
         self,
         archive_pickle: dict,
         status_dict: dict,
-    ) -> None:
+    ) -> dict:
+        # TODO: break this function into find projects and find directories in next PR (refactor)
         """
         Function to fetch qualified projects and notify on Slack
 
@@ -619,7 +627,10 @@ class ArchiveClass:
             status_dict: dict to store status of the runs
         """
 
-        logger.info("Start finding projs and notify")
+        logger.info("Start finding projects")
+
+        archive_pickle["to_be_archived"] = []
+        archive_pickle["staging_52"] = []
 
         # special notify include those projs / directories in staging52
         # which has been tagged 'no-archive' before but has not been modified
@@ -631,7 +642,7 @@ class ArchiveClass:
         to_be_archived_list: dict = collections.defaultdict(list)
 
         # store to-be-archived directory in stagingarea52
-        to_be_archived_dir: list[str] = []
+        to_be_archived_directories: list[str] = []
 
         project_ids_to_exclude = set(
             self.precision_projects + [self.project_52, self.project_53]
@@ -721,6 +732,7 @@ class ArchiveClass:
                 # add project-id to to-be-archived list in memory
                 archive_pickle["to_be_archived"].append(proj_id)
 
+                # this is for slack notification
                 if project_name.startswith("002"):
                     to_be_archived_list["002"].append(
                         f"<{self.dnanexus_url_prefix}/{trimmed_id}/|{project_name}>"
@@ -799,7 +811,9 @@ class ArchiveClass:
                     if not no_archive:
                         # there's no 'no-archive' tag or 'never-archive' tag
                         archive_pickle["staging_52"].append(original_dir)
-                        to_be_archived_dir.append(
+
+                        # this is for slack notification
+                        to_be_archived_directories.append(
                             f"<{STAGING_PREFIX}/{trimmed_dir}|{original_dir}>"
                         )
                     else:
@@ -830,7 +844,7 @@ class ArchiveClass:
                                 f"{original_dir} in `staging52`",
                             )
                             archive_pickle["staging_52"].append(original_dir)
-                            to_be_archived_dir.append(
+                            to_be_archived_directories.append(
                                 f"<{STAGING_PREFIX}/{trimmed_dir}|{original_dir}>"
                             )
                         else:
@@ -851,63 +865,98 @@ class ArchiveClass:
         )
 
         # get everything ready for slack notification
-        proj002 = sorted(to_be_archived_list["002"])
-        proj003 = []
-        folders52 = sorted(to_be_archived_dir)
-        no_archive_list = sorted(no_archive_list)
-        never_archive_list = sorted(never_archive_list)
+        proj002: list = sorted(to_be_archived_list["002"])
+        proj003: list = []
+        folders52: list = sorted(to_be_archived_directories)
+        no_archive_list: list = sorted(no_archive_list)
+        never_archive_list: list = sorted(never_archive_list)
 
         # process 003 list to sort by user in Slack notification
         temp003 = to_be_archived_list["003"]
         if temp003:
+            # sort list by user
             temp003 = sorted(temp003, key=lambda d: d["user"])
             current_usr = None
+
             for link in temp003:
+                # if new user
                 if current_usr != link["user"]:
                     proj003.append("\n")
-                    current_usr = link["user"]
+                    current_usr = link["user"]  # update current user
 
                     proj003.append(
                         f"<@{self.members[current_usr]}>"
                         if self.members.get(current_usr)
-                        else "Cannot find id for: current_usr"
+                        else f"Cannot find id for: {current_usr}"
                     )
 
                 proj003.append(link["link"])
 
-        # end processing 003 list
-        big_list = [
-            ("002", proj002),
-            ("003", proj003),
-            ("staging52", folders52),
-            ("special-notify", special_notify_list),
-            ("no-archive", no_archive_list),
-            ("never-archive", never_archive_list),
+        logger.info("End of finding projects")
+
+        return {
+            "002": proj002,
+            "003": proj003,
+            "staging52": folders52,
+            "no-archive": no_archive_list,
+            "never-archive": never_archive_list,
+            "special-notify": special_notify_list,
+        }
+
+    def notify_on_slack(
+        self, notification_data: dict, next_archiving_date: dt.datetime
+    ) -> None:
+        """
+        Notify on slack
+
+        :param notification_data: dictionary of key (purpose) and value (list of projects)
+        :param next_archiving_date: next archiving date
+
+        :return: None
+        """
+        ORDERS = [
+            "002",
+            "003",
+            "staging52",
+            "precision",
+            "special-notify",
+            "no-archive",
+            "never-archive",
         ]
 
-        next_archiving_date = self.get_next_archiving_date_relative_to_today(
-            self.today_datetime
-        )
-
-        for purpose, data in big_list:
+        for order in ORDERS:
+            data: list = notification_data.get(order)
             if data:
-                data.append("-- END OF MESSAGE --")
+                data.append(":checkered_flag:")
 
                 self.slack.post_message_to_slack(
                     "#egg-alerts",
-                    purpose,
+                    order,
                     self.today_datetime,
                     data=data,
                     archiving_date=next_archiving_date,
                 )
 
-        # save dict (only if there's to-be-archived)
-        if proj002 or proj003 or folders52:
-            logger.info(f"Writing into pickle file at {self.archive_pickle_path}")
-            with open(self.archive_pickle_path, "wb") as f:
-                pickle.dump(archive_pickle, f)
+    def _write_to_file(self, data: list, target: str) -> None:
+        """
+        Function to write to file
 
-        logger.info("End of finding projs and notify")
+        :param data: list of data to be written
+        :param target: target filepath
+
+        :return: None
+        """
+        # if file not present, create one
+        if os.path.isfile(target):
+            with open(target, "a") as f:
+                f.write("\n" + f"=== {self.today_datetime} ===")
+
+                for line in data:
+                    f.write("\n" + line)
+        else:  # if file present, append to it
+            with open(target, "w") as f:
+                f.write("\n" + f"=== {self.today_datetime} ===")
+                f.write("\n".join(data))
 
     def archiving_function(
         self,
@@ -1035,6 +1084,8 @@ class ArchiveClass:
                                 temp_archived["archived"].append(
                                     f"{project_id} | {project_name} | {archived_file_count}"
                                 )
+                        else:
+                            logger.info("Running in debug mode, skipping archiving")
                     else:
                         # if no file-id match the regex
                         # do an overall dx.Project.archive
@@ -1091,6 +1142,8 @@ class ArchiveClass:
                                     temp_archived["archived"].append(
                                         f"{project_id} | {project_name} | {archived_file_count}"
                                     )
+                        else:
+                            logger.info("Running in debug mode, skipping archiving")
                 else:
                     # project not older than ARCHIVE_MODIFIED_MONTH
                     # meaning project has been modified recently, so skip
@@ -1112,30 +1165,12 @@ class ArchiveClass:
 
         # write file-id that failed archive
         if failed_archive:
-            if os.path.isfile(self.archived_failed_path):
-                with open(self.archived_failed_path, "a") as f:
-                    f.write("\n" + f"=== {self.today_datetime} ===")
-
-                    for line in failed_archive:
-                        f.write("\n" + line)
-            else:
-                with open(self.archived_failed_path, "w") as f:
-                    f.write("\n" + f"=== {self.today_datetime} ===")
-                    f.write("\n".join(failed_archive))
+            self._write_to_file(failed_archive, self.archived_failed_path)
 
         # keep a copy of what has been archived
         # ONLY IF THERE ARE FILEs BEING ARCHIVED
         if temp_archived:
-            if os.path.isfile(self.archived_txt_path):
-                with open(self.archived_txt_path, "a") as f:
-                    f.write("\n" + f"=== {self.today_datetime} ===")
-
-                    for line in temp_archived["archived"]:
-                        f.write("\n" + line)
-            else:
-                with open(self.archived_txt_path, "w") as f:
-                    f.write("\n" + f"=== {self.today_datetime} ===")
-                    f.write("\n".join(temp_archived["archived"]))
+            self._write_to_file(temp_archived["archived"], self.archived_txt_path)
 
             # also send a notification to say what have been archived
             self.slack.post_message_to_slack(
@@ -1145,14 +1180,177 @@ class ArchiveClass:
                 data=temp_archived["archived"],
             )
 
-        # empty pickle (memory)
-        logger.info("Clearing pickle file")
-        archive_pickle["to_be_archived"] = []
-        archive_pickle["staging_52"] = []
-
-        # save memory dict
-        logger.info(f"Writing into pickle file at {self.archive_pickle_path}")
-        with open(self.archive_pickle_path, "wb") as f:
-            pickle.dump(archive_pickle, f)
-
         logger.info("End of archiving function")
+
+    def _get_all_files_in_folder(self, project_id: str, folder: str = None) -> list:
+        """
+        Function fetch all files within a folder in a project
+
+        Args:
+            project_id (str): project-id
+            folder (str): folder path
+
+        Returns:
+            list: list of files
+        """
+        return list(
+            dx.find_data_objects(
+                classname="file",
+                folder=folder,
+                project=project_id,
+                describe={
+                    "modified": True,
+                    "archivalState": True,
+                },
+            )
+        )
+
+    def _archive_project(self, project_id, folder) -> None:
+        """
+        Function to archive project with folder param.
+        If dnanexus-related error, we resort to archiving file by file
+        If unknown error, we log it and move on
+
+        Args:
+            project_id (str): project-id
+            folder (str): folder path
+
+        Returns:
+            None
+        """
+        try:
+            dx.api.project_archive(
+                project_id,
+                input_params={"folder": folder},
+            )
+        except (
+            dx.exceptions.ResourceNotFound,
+            dx.exceptions.PermissionDenied,
+            dx.exceptions.InvalidInput,
+            dx.exceptions.InvalidState,
+        ):
+            # if dnanexus project-archive failed
+            # archive file by file
+            files = self._get_all_files_in_folder(project_id, folder)
+
+            if files:
+                active_files = [
+                    file
+                    for file in files
+                    if file["describe"]["archivalState"] == "active"
+                ]
+
+                for file_id in active_files:
+                    self._archive_file(file_id, project_id)
+        except Exception as e:
+            logger.error(f"Archiving project error (unknown): {e}")
+
+    def find_precision_project(
+        self,
+        archive_pickle: dict,
+    ) -> list:
+        """
+        Function to find folder in "specific" projects
+        that are older than precision_month and record them
+
+        :param archive_pickle: pickle file that act as the memory
+        :param precision_projects: list of project-id that are precision projects
+        :param precision_month: number of months to be considered as "old"
+
+        :return: list of links to folder within precision projects that are going
+        to be archived
+        """
+        # clear the memory first
+        logger.info("Finding precision projects...")
+        archive_pickle["precision"] = []
+        to_be_archived = []
+
+        for project_id in self.precision_projects:
+            try:
+                dx_project = dx.DXProject(project_id)
+            except Exception as e:
+                # project is not found by dnanexus
+                # incorrect project-id
+                logger.info(f'Project "{project_id}" not found by DNAnexus')
+                continue  # skip
+
+            folders = dx_project.list_folder().get("folders", [])
+
+            for folder in folders:
+                files = self._get_all_files_in_folder(project_id, folder)
+
+                if not files:  # if no file in folder
+                    continue
+
+                active_files = [
+                    file
+                    for file in files
+                    if file["describe"]["archivalState"] != "archived"
+                ]  # only process those that are not archived
+
+                if not active_files:  # no active file, everything archived
+                    continue
+
+                latest_modified_date = max(
+                    [file["describe"]["modified"] for file in active_files]
+                )  # get latest modified date
+
+                # see if latest modified date is more than precision_month
+                is_older_than: bool = older_than(
+                    self.precision_month, latest_modified_date
+                )
+
+                if is_older_than:
+                    # if the oldest modified file is older than precision_month
+                    # add the folder path and project-id to memory pickle
+                    archive_pickle["precision"].append(f"{project_id} | {folder}")
+                    to_be_archived.append(
+                        f"<{self.dnanexus_url_prefix}/{project_id.lstrip('project-')}/data/{folder.lstrip('/')}|{folder}>"
+                    )
+
+        return to_be_archived
+
+    def archive_precision_projects(
+        self,
+        project_id_and_folders: list,
+    ) -> None:
+        """
+        Function to archive "specific" projects that are older than precision_month
+
+        :param project_id_and_folders: list of tuple consisting of project-id and folder path
+        :param precision_month: number of months to be considered as "old"
+
+        :return: None
+        """
+        logger.info("Archiving precision projects...")
+
+        for project_id_and_folder in project_id_and_folders:
+            project_id, folder = (p.strip() for p in project_id_and_folder.split("|"))
+
+            # check again the same criteria if latest modified date is older than precision_month
+            # because it might have been modified recently
+            files = self._get_all_files_in_folder(project_id, folder)
+
+            active_files = [
+                file
+                for file in files
+                if file["describe"]["archivalState"] != "archived"
+            ]  # only process those that are not archived
+
+            if not active_files:  # no active file, everything archived
+                continue
+
+            latest_modified_date = max(
+                [file["describe"]["modified"] for file in active_files]
+            )  # get latest modified date
+
+            # see if latest modified date is more than precision_month
+            is_older_than: bool = older_than(self.precision_month, latest_modified_date)
+
+            if is_older_than:
+                # archive the folder in the project-id
+                if not self.debug:
+                    # archive the folder
+                    self._archive_project(project_id, folder)
+                else:
+                    logger.info("Debug mode, skipping archiving...")

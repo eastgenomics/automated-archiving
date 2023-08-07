@@ -1,4 +1,5 @@
 import os
+import pickle
 import datetime as dt
 
 from bin.helper import get_logger
@@ -9,6 +10,7 @@ from bin.util import (
     dx_login,
     get_old_tar_and_notify,
     tagging_function,
+    write_to_pickle,
 )
 
 
@@ -44,11 +46,24 @@ if __name__ == "__main__":
         )
 
         # project ids which require special attention
-        PRECISION_ARCHIVING_PROJECTS: list = [
-            project_id.strip()
-            for project_id in os.environ["PRECISION_ARCHIVING"].split(",")
-            if os.environ.get("PRECISION_ARCHIVING")
-        ]
+        PRECISION_ARCHIVING_PROJECTS: list = (
+            [
+                project_id.strip()
+                for project_id in os.environ["PRECISION_ARCHIVING"].split(",")
+            ]
+            if (
+                os.environ.get("PRECISION_ARCHIVING")  # have value in env
+                and ","
+                in os.environ.get(
+                    "PRECISION_ARCHIVING"
+                )  # have commas e.g. two or three projects
+            )
+            else (
+                [os.environ.get("PRECISION_ARCHIVING")]  # single project
+                if os.environ.get("PRECISION_ARCHIVING")
+                else []  # no project specified
+            )
+        )
 
         # inactivity month for special attention projects
         PRECISION_MONTH: int = int(os.environ.get("PRECISION_MONTH", 1))
@@ -121,8 +136,9 @@ if __name__ == "__main__":
 
     # read pickle memory
     archive_pickle: dict = read_or_new_pickle(ARCHIVE_PICKLE_PATH)
-    to_be_archived: list = archive_pickle["to_be_archived"]
-    staging52: list = archive_pickle["staging_52"]
+    to_be_archived: list = archive_pickle.get("to_be_archived")
+    staging52: list = archive_pickle.get("staging_52")
+    precisions_project: list = archive_pickle.get("precision")
 
     today: dt.date = dt.date.today()  # determine overall script date
     logger.info(f"datetime: {today}")
@@ -142,52 +158,63 @@ if __name__ == "__main__":
         MEMBER_LIST,
         DNANEXUS_URL_PREFIX,
         PRECISION_ARCHIVING_PROJECTS,
+        PRECISION_MONTH,
         slack,
     )
 
     if today.day in [1, 15]:
         dx_login(today, DNANEXUS_TOKEN, slack)
 
-        if today.day == 1:
-            get_old_tar_and_notify(
-                today,
-                TAR_MONTH,
-                slack,
-                PROJECT_52,
-                DEBUG,
-            )
+        write_to_memory: bool = False
 
-        # if there is something in memory
-        # we run archive function
-        # else we find_and_notify
-        if to_be_archived or staging52:
+        if today.day == 1:  # send tar notification
+            get_old_tar_and_notify(today, TAR_MONTH, slack, PROJECT_52, DEBUG)
+
+        if to_be_archived or staging52:  # run archiving function
             archive_class.archiving_function(archive_pickle)
 
             tagging_function(DEBUG)
 
-            archive_class.find_projects_and_notify(archive_pickle, {})
+        if precisions_project:  # run archiving function on precision projects
+            archive_class.archive_precision_projects(precisions_project)
 
-        else:
-            archive_class.find_projects_and_notify(archive_pickle, {})
+        # dict to store projects to be notified in Slack
+        archive_dict = {}
 
-    else:
-        if to_be_archived or staging52:
-            # if there's to-be-archived in memory
-            # we do the countdown to egg-alerts
-            # else we just keep silence
+        # find projects & directories to be archived
+        archive_dict = archive_class.find_projects(archive_pickle, {})
 
-            next_archiving_date = (
-                archive_class.get_next_archiving_date_relative_to_today(today)
-            )
-            diff = next_archiving_date - today
+        # find precision projects
+        archive_dict["precision"] = archive_class.find_precision_project(archive_pickle)
 
+        next_archiving_date = archive_class.get_next_archiving_date_relative_to_today(
+            today
+        )
+
+        # send notification to Slack on to-be-archived projects
+        archive_class.notify_on_slack(archive_dict, next_archiving_date)
+
+        # write into pickle memory
+        write_to_pickle(ARCHIVE_PICKLE_PATH, archive_pickle)
+
+    else:  # do the countdown outside of 1st or 15th
+        next_archiving_date = archive_class.get_next_archiving_date_relative_to_today(
+            today
+        )
+
+        period_difference: dt.timedelta = next_archiving_date - today
+
+        if (
+            to_be_archived or staging52 or precisions_project
+        ):  # if there is to-be-archived data in memory
             slack.post_message_to_slack(
                 "#egg-alerts",
                 "countdown",
                 today,
-                days_till_archiving=diff.days,
+                days_till_archiving=period_difference.days,
                 archiving_date=next_archiving_date,
             )
+            pass
         else:
             logger.info("No data in memory")
 
