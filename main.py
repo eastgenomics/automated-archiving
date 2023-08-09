@@ -1,5 +1,4 @@
 import os
-import pickle
 import datetime as dt
 
 from bin.helper import get_logger
@@ -160,8 +159,6 @@ if __name__ == "__main__":
     if today.day in [1, 15]:
         dx_login(today, DNANEXUS_TOKEN, slack)
 
-        write_to_memory: bool = False
-
         if today.day == 1:  # send tar notification
             get_old_tar_and_notify(today, TAR_MONTH, slack, PROJECT_52, DEBUG)
 
@@ -173,14 +170,36 @@ if __name__ == "__main__":
         if precisions_project:  # run archiving function on precision projects
             archive_class.archive_precision_projects(precisions_project)
 
-        # dict to store projects to be notified in Slack
+        # dict to store projects and directories to be notified in Slack
         archive_dict = {}
 
         # find projects & directories to be archived
-        archive_dict = archive_class.find_projects(archive_pickle, {})
+        archive_dict = archive_class.find_projects(archive_pickle)
+        archive_dict["staging52"] = archive_class.find_directories(
+            PROJECT_52, archive_pickle
+        )
+
+        # find projects that are tagged with "no-archive"
+        archive_dict[
+            "no-archive"
+        ] = archive_class.get_projects_and_directory_based_on_single_tag(
+            "no-archive",
+            PROJECT_52,
+        )
+
+        # get projects that are tagged with "never-archive"
+        archive_dict[
+            "never-archive"
+        ] = archive_class.get_projects_and_directory_based_on_single_tag(
+            "never-archive",
+            PROJECT_52,
+        )
 
         # find precision projects
         archive_dict["precision"] = archive_class.find_precision_project(archive_pickle)
+
+        # special notification
+        archive_dict["special-notify"] = archive_class.special_notify_list
 
         next_archiving_date = archive_class.get_next_archiving_date_relative_to_today(
             today

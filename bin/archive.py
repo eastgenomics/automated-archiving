@@ -1,5 +1,4 @@
 import os
-import pickle
 import collections
 import datetime as dt
 import dxpy as dx
@@ -49,6 +48,12 @@ class ArchiveClass:
         self.precision_month = precision_month
         self.slack = slack
 
+        self.project_ids_to_exclude = set(
+            precision_projects + [self.project_52, self.project_53]
+        )
+
+        self.special_notify_list: list[str] = []
+
     def _get_files_in_project_based_on_one_tag(self, tag: str, project_id: str) -> list:
         """
         Function to get files in a project based on a single tag
@@ -72,7 +77,7 @@ class ArchiveClass:
             )
         )
 
-    def _get_projects_and_directory_based_on_single_tag(
+    def get_projects_and_directory_based_on_single_tag(
         self,
         tag: str,
         project_id: str,
@@ -162,42 +167,42 @@ class ArchiveClass:
         except Exception as e:
             logger.error(f"REMOVE TAG: {project_id} failed with error {e}")
 
-    def _validate_directory(self, directory: str, month: int) -> bool:
+    def _validate_directory(self, directory: str) -> bool:
         """
-        Function to check if project (002/003) for that directory
-        exist. e.g. For 210407_A01295_0010_AHWL5GDRXX
-        it will find 002_210407_A01295_0010_AHWL5GDRXX project
+        Check if directory or folder is valid:
+            - if its 002 or 003 project fits the criteria for archiving
+            - criteria is the month of inactivity of its parent project
 
-        If the 002/003 exist, we check if the proj has been inactive
-        for the last X month. If yes, return True.
-
-        Inputs:
-        :param: directory: trimmed directory pathway
-        :param: month: number of month inactive
+        Parameters:
+        :param: directory: directory or folder to check
 
         Returns:
-            - `True` if its 002 has not been active for X month
-            - `False` if no 002 project
-            - `False` if 002 project has been active in the past X month
+        :return: True if parent project fits the criteria
+        :return: False if parent project does not fit the criteria or parent project not found
         """
 
-        result: list = list(
+        # find its parent project (002 or 003)
+        data: list = list(
             dx.find_projects(
-                directory,
+                f"(002|003)_{directory}*",
                 name_mode="regexp",
-                describe={"fields": {"modified": True}},
+                describe={"fields": {"modified": True, "name": True}},
                 limit=1,
             )
         )
 
         # if no 002/003 project
-        if not result:
+        if not data:
             return False
 
-        modified_epoch: int = result[0]["describe"]["modified"]
+        project_name: str = data[0]["describe"]["name"]
+        modified_epoch: int = data[0]["describe"]["modified"]
 
-        # check modified date of the 002/003 proj
-        if self._older_than(month, modified_epoch):
+        # check modified date of the 002 or 003 project
+        if self._older_than(
+            self.month2 if project_name.startswith("002") else self.month3,
+            modified_epoch,
+        ):
             return True
         else:
             return False
@@ -227,34 +232,6 @@ class ArchiveClass:
         except Exception as e:
             logger.error(e)  # probably wont happen but just in case
             return []
-
-    def _get_all_directories_in_project_52(self, project_id: str) -> list:
-        """
-        Function to get all directories in a project-id
-
-        Parameters:
-        :param: project_id: DNAnexus project-id
-
-        Return:
-        list of tuple for ease of processing later on
-        tuple contains:
-            - trimmed directory name (e.g. 210407_A01295_0010_AHWL5GDRXX)
-                for 002 querying later on
-            - original directory path (e.g. /210407_A01295_0010_AHWL5GDRXX/)
-        """
-
-        # need to do this twice in root and in /processed
-        # because that's how staging-52 is structured
-        return [
-            (file.lstrip("/").lstrip("/processed"), file)
-            for file in self._get_folders_in_project(project_id)
-            if file != "/processed"  # directories in root of staging-52
-        ] + [
-            (file.lstrip("/").lstrip("/processed"), file)
-            for file in self._get_folders_in_project(
-                project_id, directory_path="/processed"
-            )  # directories in /processed folder
-        ]
 
     def _get_projects_as_dict(self, project_type: str) -> dict:
         """
@@ -577,7 +554,7 @@ class ArchiveClass:
                             temp_dict["archived"].append(
                                 f"{self.project_52}:{directory_path} | {res['count']}"
                             )
-                    except Exception as e:
+                    except Exception:
                         logger.info(
                             f"Archiving {self.project_52}:{directory_path} file by file"
                             " because dx.project.archive failed"
@@ -613,12 +590,178 @@ class ArchiveClass:
                 else:
                     logger.info("Running in debug mode. Skipping archiving")
 
+    def find_directories(self, project_id: str, archive_pickle: dict) -> None:
+        """
+        Find directories or folders in a project which fit the criteria for archiving
+
+        Parameters:
+            project_id: project id
+            archive_pickle: dict to store folder path that will be archived
+
+        Returns:
+            None
+        """
+
+        archive_pickle["staging_52"] = []
+
+        # get all directories in staging-52
+        trimmed_folder_to_original_value = {}
+
+        # list to contain to-be-archived directories
+        # for Slack notification
+        to_be_archived_directories: list[str] = []
+
+        # get folders in root of stagingarea-52
+        for folder in self._get_folders_in_project(project_id):
+            if folder == "/processed":
+                continue
+
+            trimmed_folder = folder.lstrip("/")
+            trimmed_folder_to_original_value[trimmed_folder] = folder
+
+        # get folders in /processed of stagingarea-52
+        for folder in self._get_folders_in_project(
+            project_id, directory_path="/processed"
+        ):
+            trimmed_folder = folder.lstrip("/processed/")
+            trimmed_folder_to_original_value[trimmed_folder] = folder
+
+        logger.info(
+            f"Processing {len(trimmed_folder_to_original_value)} directories in stagingA-52"
+        )
+
+        # check if directories have 002 projs made and 002 has not been modified
+        # in the last X month
+        trimmed_folder_to_original_value = {
+            trimmed: original
+            for trimmed, original in trimmed_folder_to_original_value.items()
+            if self._validate_directory(trimmed)
+        }
+
+        logger.info(
+            f"Number of old enough directories: {len(trimmed_folder_to_original_value)}",
+        )
+
+        if trimmed_folder_to_original_value:
+            logger.info("Processing directories...")
+
+            # for building proj link
+            trimmed_project = self.project_52.lstrip("project-")
+
+            # set a counter
+            n = 0
+
+            for _, original_directory in trimmed_folder_to_original_value.items():
+                trimmed_directory = original_directory.lstrip("/")
+
+                # progress tracking
+                if n > 0 and n % 20 == 0:
+                    logger.info(
+                        f"Processing {n}/{len(trimmed_folder_to_original_value)} directories",
+                    )
+
+                n += 1
+
+                # get all the files within that directory in staging-52
+                all_files = list(
+                    dx.find_data_objects(
+                        classname="file",
+                        project=self.project_52,
+                        folder=original_directory,
+                        describe={"fields": {"archivalState": True}},
+                        limit=5 if self.debug else None,  # limit to 5 files if debug
+                    )
+                )
+
+                # get all files' archivalStatus
+                status = set([x["describe"]["archivalState"] for x in all_files])
+
+                # if there're files in directory with 'live' status
+                if "live" in status:
+                    # if there's 'never-archive' tag in any file, continue
+                    never_archive = list(
+                        dx.find_data_objects(
+                            project=self.project_52,
+                            folder=original_directory,
+                            tags=["never-archive"],
+                            limit=1,
+                        )
+                    )
+
+                    if never_archive:
+                        continue
+
+                    # check for 'no-archive' tag in any files
+                    no_archive = list(
+                        dx.find_data_objects(
+                            project=self.project_52,
+                            folder=original_directory,
+                            tags=["no-archive"],
+                            describe={"fields": {"modified": True}},
+                            limit=5
+                            if self.debug
+                            else None,  # limit to 5 files if debug
+                        )
+                    )
+
+                    staging_prefix = (
+                        f"{self.dnanexus_url_prefix}/{trimmed_project}/data"
+                    )
+
+                    if not no_archive:
+                        # there's no 'no-archive' tag or 'never-archive' tag
+                        archive_pickle["staging_52"].append(original_directory)
+
+                        # this is for slack notification
+                        to_be_archived_directories.append(
+                            f"<{staging_prefix}/{trimmed_directory}|{original_directory}>"
+                        )
+                    else:
+                        # if there's 'no-archive' tag
+                        # check if all files are active in the last X month
+                        # when tagged, modified date will change
+                        # if modified date > x month, we know the tag was
+                        # probably there for quite a while
+                        # if all files have modified date > x month
+                        # we remove tags and list directory for archiving
+                        if all(
+                            [
+                                self._older_than(self.month2, f["describe"]["modified"])
+                                for f in no_archive
+                            ]
+                        ):
+                            # if all files within the directory are older than
+                            # x month
+                            logger.info(f"Removing tag for {len(no_archive)} files")
+
+                            if not self.debug:
+                                for file in no_archive:
+                                    self._remove_tag_from_file(
+                                        file["id"], self.project_52
+                                    )
+
+                            self.special_notify_list.append(
+                                f"{original_directory} in `staging52`",
+                            )
+                            archive_pickle["staging_52"].append(original_directory)
+                            to_be_archived_directories.append(
+                                f"<{staging_prefix}/{trimmed_directory}|{original_directory}>"
+                            )
+                        else:
+                            logger.info(
+                                f"SKIPPED: {original_directory} in stagingarea52",
+                            )
+                            continue
+                else:
+                    # no 'live' status means all files
+                    # in the directory have been archived thus we continue
+                    continue
+
     def find_projects(
         self,
         archive_pickle: dict,
-        status_dict: dict,
+        status_dict: dict = {},
     ) -> dict:
-        # TODO: break this function into find projects and find directories in next PR (refactor)
         """
         Function to fetch qualified projects and notify on Slack
 
@@ -630,47 +773,16 @@ class ArchiveClass:
         logger.info("Start finding projects")
 
         archive_pickle["to_be_archived"] = []
-        archive_pickle["staging_52"] = []
-
-        # special notify include those projs / directories in staging52
-        # which has been tagged 'no-archive' before but has not been modified
-        # for X months. It will be listed under its own column in Slack msg
-        # to make it more visible
-        special_notify_list: list[str] = []
 
         # store to-be-archived projects
         to_be_archived_list: dict = collections.defaultdict(list)
 
-        # store to-be-archived directory in stagingarea52
-        to_be_archived_directories: list[str] = []
-
-        project_ids_to_exclude = set(
-            self.precision_projects + [self.project_52, self.project_53]
-        )
-
         # get all old enough projects
         old_enough_projects_dict = self._get_old_enough_projects(
-            project_ids_to_exclude,
+            self.project_ids_to_exclude,
         )
 
         logger.info(f"Number of old enough projects: {len(old_enough_projects_dict)}")
-
-        # get all directories in staging-52
-        all_directories = self._get_all_directories_in_project_52(self.project_52)
-
-        logger.info(f"Processing {len(all_directories)} directories in stagingA-52")
-
-        # check if directories have 002 projs made and 002 has not been modified
-        # in the last X month
-        old_enough_directories = [
-            (trimmed_directory, original_directory)
-            for trimmed_directory, original_directory in all_directories
-            if self._validate_directory(trimmed_directory, self.month2)
-        ]
-
-        logger.info(
-            f"Number of old enough directories: {len(old_enough_directories)}",
-        )
 
         if old_enough_projects_dict:
             logger.info("Processing projects...")
@@ -725,9 +837,9 @@ class ArchiveClass:
                         # project is old enough + have 'no-archive' tag
                         # thus, we remove the tag and
                         # list it in special-notify list
-                        self.remove_project_tag(proj_id)
+                        self._remove_project_tag(proj_id)
 
-                    special_notify_list.append(project_name)
+                    self.special_notify_list.append(project_name)
 
                 # add project-id to to-be-archived list in memory
                 archive_pickle["to_be_archived"].append(proj_id)
@@ -745,131 +857,9 @@ class ArchiveClass:
                         }
                     )
 
-        # sieve through each directory in staging52
-        if old_enough_directories:
-            logger.info("Processing directories...")
-
-            # for building proj link
-            trimmed_proj = self.project_52.lstrip("project-")
-
-            n = 0
-
-            for _, original_dir in old_enough_directories:
-                trimmed_dir: str = original_dir.lstrip("/")
-
-                if n > 0 and n % 20 == 0:
-                    logger.info(
-                        f"Processing {n}/{len(old_enough_directories)} directories",
-                    )
-
-                n += 1
-
-                # get all the files within that directory in staging-52
-                all_files = list(
-                    dx.find_data_objects(
-                        classname="file",
-                        project=self.project_52,
-                        folder=original_dir,
-                        describe={"fields": {"archivalState": True}},
-                        limit=5 if self.debug else None,  # limit to 5 files if debug
-                    )
-                )
-
-                # get all files' archivalStatus
-                status = set([x["describe"]["archivalState"] for x in all_files])
-
-                # if there're files in directory with 'live' status
-                if "live" in status:
-                    # if there's 'never-archive' tag in any file, continue
-                    never_archive = list(
-                        dx.find_data_objects(
-                            project=self.project_52,
-                            folder=original_dir,
-                            tags=["never-archive"],
-                            limit=1,
-                        )
-                    )
-
-                    if never_archive:
-                        continue
-
-                    # check for 'no-archive' tag in any files
-                    no_archive = list(
-                        dx.find_data_objects(
-                            project=self.project_52,
-                            folder=original_dir,
-                            tags=["no-archive"],
-                            describe={"fields": {"modified": True}},
-                            limit=5
-                            if self.debug
-                            else None,  # limit to 5 files if debug
-                        )
-                    )
-
-                    STAGING_PREFIX = f"{self.dnanexus_url_prefix}/{trimmed_proj}/data"
-
-                    if not no_archive:
-                        # there's no 'no-archive' tag or 'never-archive' tag
-                        archive_pickle["staging_52"].append(original_dir)
-
-                        # this is for slack notification
-                        to_be_archived_directories.append(
-                            f"<{STAGING_PREFIX}/{trimmed_dir}|{original_dir}>"
-                        )
-                    else:
-                        # if there's 'no-archive' tag
-                        # check if all files are active in the last X month
-                        # when tagged, modified date will change
-                        # if modified date > x month, we know the tag was
-                        # probably there for quite a while
-                        # if all files have modified date > x month
-                        # we remove tags and list directory for archiving
-                        if all(
-                            [
-                                self._older_than(self.month2, f["describe"]["modified"])
-                                for f in no_archive
-                            ]
-                        ):
-                            # if all files within the directory are older than
-                            # x month
-                            logger.info(f"Removing tag for {len(no_archive)} files")
-
-                            if not self.debug:
-                                for file in no_archive:
-                                    self._remove_tag_from_file(
-                                        file["id"], self.project_52
-                                    )
-
-                            special_notify_list.append(
-                                f"{original_dir} in `staging52`",
-                            )
-                            archive_pickle["staging_52"].append(original_dir)
-                            to_be_archived_directories.append(
-                                f"<{STAGING_PREFIX}/{trimmed_dir}|{original_dir}>"
-                            )
-                        else:
-                            logger.info(
-                                f"SKIPPED: {original_dir} in stagingarea52",
-                            )
-                            continue
-                else:
-                    # no 'live' status means all files
-                    # in the directory have been archived thus we continue
-                    continue
-
-        no_archive_list: list = self._get_projects_and_directory_based_on_single_tag(
-            "no-archive", self.project_52
-        )
-        never_archive_list: list = self._get_projects_and_directory_based_on_single_tag(
-            "never-archive", self.project_52
-        )
-
         # get everything ready for slack notification
-        proj002: list = sorted(to_be_archived_list["002"])
-        proj003: list = []
-        folders52: list = sorted(to_be_archived_directories)
-        no_archive_list: list = sorted(no_archive_list)
-        never_archive_list: list = sorted(never_archive_list)
+        projects_002: list = sorted(to_be_archived_list["002"])
+        projects_003: list = []
 
         # process 003 list to sort by user in Slack notification
         temp003 = to_be_archived_list["003"]
@@ -881,27 +871,20 @@ class ArchiveClass:
             for link in temp003:
                 # if new user
                 if current_usr != link["user"]:
-                    proj003.append("\n")
+                    projects_003.append("\n")
                     current_usr = link["user"]  # update current user
 
-                    proj003.append(
+                    projects_003.append(
                         f"<@{self.members[current_usr]}>"
                         if self.members.get(current_usr)
                         else f"Cannot find id for: {current_usr}"
                     )
 
-                proj003.append(link["link"])
+                projects_003.append(link["link"])
 
         logger.info("End of finding projects")
 
-        return {
-            "002": proj002,
-            "003": proj003,
-            "staging52": folders52,
-            "no-archive": no_archive_list,
-            "never-archive": never_archive_list,
-            "special-notify": special_notify_list,
-        }
+        return {"002": projects_002, "003": projects_003}
 
     def notify_on_slack(
         self, notification_data: dict, next_archiving_date: dt.datetime
@@ -1098,7 +1081,7 @@ class ArchiveClass:
                                     temp_archived["archived"].append(
                                         f"{project_id} | {project_name} | {res['count']}"
                                     )
-                            except Exception as e:
+                            except Exception:
                                 # this normally happens when there are applet or
                                 # record file type
                                 # in project in which DNAnexus API for some reason
@@ -1268,7 +1251,7 @@ class ArchiveClass:
         for project_id in self.precision_projects:
             try:
                 dx_project = dx.DXProject(project_id)
-            except Exception as e:
+            except Exception:
                 # project is not found by dnanexus
                 # incorrect project-id
                 logger.info(f'Project "{project_id}" not found by DNAnexus')
