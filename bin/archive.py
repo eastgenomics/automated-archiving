@@ -590,7 +590,11 @@ class ArchiveClass:
                 else:
                     logger.info("Running in debug mode. Skipping archiving")
 
-    def find_directories(self, project_id: str, archive_pickle: dict) -> None:
+    def find_directories(
+        self,
+        project_id: str,
+        archive_pickle: dict,
+    ) -> list:
         """
         Find directories or folders in a project which fit the criteria for archiving
 
@@ -756,6 +760,8 @@ class ArchiveClass:
                     # no 'live' status means all files
                     # in the directory have been archived thus we continue
                     continue
+
+        return to_be_archived_directories
 
     def find_projects(
         self,
