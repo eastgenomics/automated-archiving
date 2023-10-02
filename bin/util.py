@@ -169,12 +169,14 @@ def _add_tag_to_project(tag: str, project_id: str) -> None:
     except dx.exceptions.ResourceNotFound:
         logger.error(f"{project_id} not found when tagging")
     except dx.exceptions.InvalidInput:
-        logger.error(f"invalid tag input when tagging {tag}")
+        logger.error(
+            f"invalid tag input when tagging {tag} for project id {project_id}"
+        )
     except dx.exceptions.PermissionDenied:
         logger.error(f"permission denied when tagging {project_id}")
     except Exception as e:
         # no idea what's wrong
-        logger.error(e)
+        logger.error(project_id + e)
 
 
 def _remove_tags_from_project(tags: list, project_id: str) -> None:
@@ -195,12 +197,14 @@ def _remove_tags_from_project(tags: list, project_id: str) -> None:
     except dx.exceptions.ResourceNotFound:
         logger.error(f"{project_id} not found when tagging")
     except dx.exceptions.InvalidInput:
-        logger.error(f"invalid tag input when tagging {tags}")
+        logger.error(
+            f"invalid tag input when removing tag {tags} from project id {project_id}"
+        )
     except dx.exceptions.PermissionDenied:
         logger.error(f"permission denied when tagging {project_id}")
     except Exception as e:
         # no idea what's wrong
-        logger.error(e)
+        logger.error(project_id + e)
 
 
 def tagging_function(debug: bool) -> None:
@@ -274,13 +278,9 @@ def tagging_function(debug: bool) -> None:
             if "fully archived" in tags:
                 # if 'fully archived' in tags
                 # we do a reset and add 'partial'
-                dx.api.project_remove_tags(
-                    project_id,
-                    input_params={
-                        "tags": ["partial archived", "fully archived"],
-                    },
+                _remove_tags_from_project(
+                    ["partial archived", "fully archived"], project_id
                 )
-                _remove_tags_from_project()
                 _add_tag_to_project("partial archived", project_id)
             elif "partial archived" in tags:
                 # if 'partially archived' is present
