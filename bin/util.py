@@ -176,7 +176,7 @@ def _add_tag_to_project(tag: str, project_id: str) -> None:
         logger.error(f"permission denied when tagging {project_id}")
     except Exception as e:
         # no idea what's wrong
-        logger.error(project_id + e)
+        logger.error(f"failed to add tag to project id {project_id}: {e}")
 
 
 def _remove_tags_from_project(tags: list, project_id: str) -> None:
@@ -204,7 +204,7 @@ def _remove_tags_from_project(tags: list, project_id: str) -> None:
         logger.error(f"permission denied when tagging {project_id}")
     except Exception as e:
         # no idea what's wrong
-        logger.error(project_id + e)
+        logger.error(f"failed to add tag to project id {project_id}: {e}")
 
 
 def tagging_function(debug: bool) -> None:
@@ -233,6 +233,9 @@ def tagging_function(debug: bool) -> None:
     }
 
     for project_id, v in archived_projects.items():
+        if not project_id.strip():
+            continue
+
         tags = [tag.lower() for tag in v["describe"]["tags"]]
 
         if "partial archived" in tags:
@@ -256,6 +259,9 @@ def tagging_function(debug: bool) -> None:
 
     for project_id, v in projects_with_unsure_archival_status.items():
         # get project tags
+        if not project_id.strip():
+            continue
+
         tags = [tag.lower() for tag in v["describe"]["tags"]]
 
         # get all archival status within the projects
