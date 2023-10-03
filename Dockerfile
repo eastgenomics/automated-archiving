@@ -15,4 +15,4 @@ COPY main.py /
 ADD bin bin/
 
 
-CMD [ "python", "main.py"]
+ENTRYPOINT [ "python", "main.py"]

@@ -6,3 +6,4 @@ members.py
 *.pickle
 *.log
 *.log.*
+.ruff_cache

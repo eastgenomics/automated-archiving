@@ -1,3 +1,4 @@
+import argparse
 import os
 import datetime as dt
 
@@ -115,6 +116,23 @@ if __name__ == "__main__":
 
         raise KeyError(f"env {missing_env} cannot be found in config file")
 
+    parser = argparse.ArgumentParser(
+        description="optioal datetime override argument in format YYYYMMDD",
+    )
+
+    parser.add_argument("-dt", "--datetime")  # optional argument
+
+    args = parser.parse_args()
+
+    if args.datetime:
+        try:
+            today = dt.datetime.strptime(args.datetime, "%Y%m%d").date()
+        except ValueError:
+            logger.error(f"Invalid datetime format. Use YYYYMMDD. {args.datetime}")
+            today: dt.date = dt.date.today()
+    else:
+        today: dt.date = dt.date.today()  # determine overall script date
+
     # define Slack class
     slack = SlackClass(SLACK_TOKEN, TAR_MONTH, DEBUG)
 
@@ -134,7 +152,6 @@ if __name__ == "__main__":
     staging52: list = archive_pickle.get("staging_52")
     precisions_project: list = archive_pickle.get("precision")
 
-    today: dt.date = dt.date.today()  # determine overall script date
     logger.info(f"datetime: {today}")
 
     archive_class = ArchiveClass(

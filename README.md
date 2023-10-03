@@ -97,7 +97,9 @@ To rebuild image: `docker build -t <image name> .`
 
 Current docker command (server):
 
-```docker run --env-file <config.file> -v /var/log/monitoring:/monitoring: -v /member:/member <image>```
+```docker run --env-file <config.file> -v /var/log/monitoring:/monitoring: -v /member:/member <image> --datetime 20231001```
+
+- optional argument `datetime` to override script datetime
 
 ## Automation
 A cron job can be set up to run the script on 1st and 15th of each month
