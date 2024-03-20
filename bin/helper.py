@@ -15,7 +15,9 @@ from logging.handlers import TimedRotatingFileHandler
 FORMATTER = logging.Formatter(
     "%(asctime)s:%(name)s:%(pathname)s:%(lineno)d:%(levelname)s:::%(message)s"
 )
-LOGGING_PATH = os.environ.get("ARCHIVING_LOGGING_PATH", "automated-archiving.log")
+LOGGING_PATH = os.environ.get(
+    "ARCHIVING_LOGGING_PATH", "automated-archiving.log"
+)
 
 
 def get_console_handler():

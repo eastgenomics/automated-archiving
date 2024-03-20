@@ -38,11 +38,11 @@ class SlackClass:
 
         # aims and messages
         self.messages = {
-            'projects2': '002 Projects to be archived.',
-            'projects3': '003 Projects to be archived.',
-            'directories': 'Directories in `staging52` to be archived.',
-            'precisions': 'Folders to be archived in `precision` projects.',
-            'archived': 'Projects or directory archived.',
+            "projects2": "002 Projects to be archived.",
+            "projects3": "003 Projects to be archived.",
+            "directories": "Directories in `staging52` to be archived.",
+            "precisions": "Folders to be archived in `precision` projects.",
+            "archived": "Projects or directory archived.",
         }
 
     def _get_archiving_date(self) -> dt.date:
@@ -129,7 +129,7 @@ class SlackClass:
             logger.info(f"POST request to {channel} successful")
         else:
             # slack api request failed
-            logger.error(response.get('error'))
+            logger.error(response.get("error"))
 
     def _send_message_in_chunks(
         self, channel: str, pretext: str, raw_data: list
@@ -241,7 +241,7 @@ class SlackClass:
             logger.info(f"POST request to {channel} successful")
         else:
             # slack api request failed
-            logger.error(response.get('error'))
+            logger.error(response.get("error"))
 
     def notify(self, aim_to_data: dict) -> None:
         """
@@ -255,13 +255,13 @@ class SlackClass:
             if aim == "tars":
                 self._send_message_with_attachment(
                     data,
-                    '#egg-alerts',
-                    f'automated-archiving: `tar.gz` in staging-52 not modified in the last {self.env.TAR_MONTH} months',
+                    "#egg-alerts",
+                    f"automated-archiving: `tar.gz` in staging-52 not modified in the last {self.env.TAR_MONTH} months",
                 )
             else:
                 if data:
                     self.post_long_message_to_slack(
-                        '#egg-alerts',
+                        "#egg-alerts",
                         aim,
                         data,
                     )

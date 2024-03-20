@@ -36,7 +36,9 @@ class FindClass:
         self.archiving_directories_slack = []
         self.archiving_precision_directories_slack = []
 
-        self.archive_pickle = read_or_new_pickle(env.AUTOMATED_ARCHIVE_PICKLE_PATH)
+        self.archive_pickle = read_or_new_pickle(
+            env.AUTOMATED_ARCHIVE_PICKLE_PATH
+        )
 
     def _get_old_enough_projects(
         self,
@@ -75,9 +77,10 @@ class FindClass:
                     and v["describe"]["dataUsage"]
                     != v["describe"]["archivedDataUsage"]  # not fully archived
                 )
-                or 'archive' in v['describe']['tags']  # has 'archive' tag
+                or "archive" in v["describe"]["tags"]  # has 'archive' tag
             )
-            and k not in self.env.PRECISION_ARCHIVING  # exclude precision projects
+            and k
+            not in self.env.PRECISION_ARCHIVING  # exclude precision projects
         }
 
         return filtered_projects
@@ -190,9 +193,10 @@ class FindClass:
         user_to_project_id_and_dnanexus = collections.defaultdict(list)
 
         for index, (project_id, v) in enumerate(qualified_projects.items()):
-
             if (index + 1) % 25 == 0:
-                logger.info(f"Processing {index + 1}/{len(qualified_projects)}")
+                logger.info(
+                    f"Processing {index + 1}/{len(qualified_projects)}"
+                )
 
             project_name: str = v["describe"]["name"]
             tags: list[str] = [tag.lower() for tag in v["describe"]["tags"]]
@@ -222,7 +226,7 @@ class FindClass:
             if "live" in statuses:
                 pass  # there is something to be archived
             else:
-                logger.info(f'Everything archived in {project_id}. Skip.')
+                logger.info(f"Everything archived in {project_id}. Skip.")
                 continue  # everything has been archived
 
             if "no-archive" in tags:
@@ -230,20 +234,17 @@ class FindClass:
                     # project is old enough + have 'no-archive' tag
                     # thus, we remove the tag and
                     # list it in special-notify list
-                    self._remove_project_tag(project_id, 'no-archive')
+                    self._remove_project_tag(project_id, "no-archive")
 
             # add project-id to archiving list (002 and 003)
             self.archiving_projects.append(project_id)
 
             # below are preparation for slack notification
-            dnanexus_project_url = (
-                f"<{self.env.DNANEXUS_URL_PREFIX}/{trimmed_project_id}/|{project_name}>"
-            )
+            dnanexus_project_url = f"<{self.env.DNANEXUS_URL_PREFIX}/{trimmed_project_id}/|{project_name}>"
 
             if project_name.startswith("002"):
                 self.archiving_projects_2_slack.append(dnanexus_project_url)
             else:
-
                 user_to_project_id_and_dnanexus[user].append(
                     {
                         "id": project_id,
@@ -252,12 +253,13 @@ class FindClass:
                 )
 
         # get everything ready for slack notification
-        self.archiving_projects_2_slack = sorted(self.archiving_projects_2_slack)
+        self.archiving_projects_2_slack = sorted(
+            self.archiving_projects_2_slack
+        )
 
         # sort 003 project by user for slack notification
         current_user = None
         for user, values in user_to_project_id_and_dnanexus.items():
-
             if current_user is None:  # first user
                 current_user = user
 
@@ -272,8 +274,8 @@ class FindClass:
             )
 
             for row in values:
-                project_id = row['id']
-                dnanexus_link = row['link']
+                project_id = row["id"]
+                dnanexus_link = row["link"]
 
                 self.archiving_projects_3_slack.append(dnanexus_link)
 
@@ -301,7 +303,9 @@ class FindClass:
         for folder in self._get_folders_in_project(
             self.env.PROJECT_52, directory_path="/processed"
         ):
-            trimmed_to_original_folder_path[folder.lstrip("/processed/")] = folder
+            trimmed_to_original_folder_path[
+                folder.lstrip("/processed/")
+            ] = folder
 
         logger.info(
             f"Found {len(trimmed_to_original_folder_path)} directories in staging-52"
@@ -340,23 +344,27 @@ class FindClass:
                     describe={
                         "fields": {
                             "archivalState": True,
-                            'tags': True,
+                            "tags": True,
                         }
                     },
                 )
             )
 
             # get all files' archivalStatus
-            statuses = set([x["describe"]["archivalState"] for x in project_files])
+            statuses = set(
+                [x["describe"]["archivalState"] for x in project_files]
+            )
             tags = set(
                 itertools.chain.from_iterable(
                     [x["describe"]["tags"] for x in project_files]
                 )
             )
 
-            if "live" in statuses:  # if there're files in directory with 'live' status
+            if (
+                "live" in statuses
+            ):  # if there're files in directory with 'live' status
                 # if there's 'never-archive' tag in any file, continue
-                if 'never-archive' in tags:
+                if "never-archive" in tags:
                     logger.info('Directory has "never-archive" tag. Skip.')
                     continue
 
@@ -391,14 +399,12 @@ class FindClass:
                 )
                 continue  # skip
 
-            PRECISION_PREFIX = (
-                f"{self.env.DNANEXUS_URL_PREFIX}/{project_id.lstrip('project-')}/data"
-            )
+            PRECISION_PREFIX = f"{self.env.DNANEXUS_URL_PREFIX}/{project_id.lstrip('project-')}/data"
 
             # get all folders within the project
             folders = project.list_folder(
-                only='folders',
-                describe={'fields': {'archivalState': True}},
+                only="folders",
+                describe={"fields": {"archivalState": True}},
             ).get("folders", [])
 
             # for each folder
@@ -407,7 +413,9 @@ class FindClass:
                 files = get_all_files_in_project(project_id, folder_path)
 
                 if not files:  # if no file in folder
-                    logger.info(f'No file in {project_id}:{folder_path}. Skip.')
+                    logger.info(
+                        f"No file in {project_id}:{folder_path}. Skip."
+                    )
                     continue
 
                 active_files = [
@@ -418,7 +426,7 @@ class FindClass:
 
                 if not active_files:  # no active file, everything archived
                     logger.info(
-                        f'All files in {project_id}:{folder_path} are archived. Skip.'
+                        f"All files in {project_id}:{folder_path} are archived. Skip."
                     )
                     continue
 
@@ -446,11 +454,15 @@ class FindClass:
         Save memory to pickle
         """
 
-        self.archive_pickle['projects'] = self.archiving_projects
-        self.archive_pickle['directories'] = self.archiving_directories
-        self.archive_pickle['precisions'] = self.archiving_precision_directories
+        self.archive_pickle["projects"] = self.archiving_projects
+        self.archive_pickle["directories"] = self.archiving_directories
+        self.archive_pickle[
+            "precisions"
+        ] = self.archiving_precision_directories
 
-        write_to_pickle(self.env.AUTOMATED_ARCHIVE_PICKLE_PATH, self.archive_pickle)
+        write_to_pickle(
+            self.env.AUTOMATED_ARCHIVE_PICKLE_PATH, self.archive_pickle
+        )
 
     def get_tar(self) -> list:
         """
@@ -489,7 +501,9 @@ class FindClass:
                 f["id"],
                 f["describe"]["folder"],
                 f["describe"]["name"],
-                self._turn_epoch_to_datetime(f['describe']['modified']).strftime('%c'),
+                self._turn_epoch_to_datetime(
+                    f["describe"]["modified"]
+                ).strftime("%c"),
             )
             for f in tars
         ]

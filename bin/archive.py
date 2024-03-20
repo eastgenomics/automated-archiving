@@ -61,12 +61,12 @@ class ArchiveClass:
             try:
                 for file in dx.find_data_objects(
                     name=regex,
-                    name_mode='regexp',
+                    name_mode="regexp",
                     project=project_id,
                     folder=directory_path,
-                    classname='file',
+                    classname="file",
                 ):
-                    file_ids.add(file.get('id'))
+                    file_ids.add(file.get("id"))
             except Exception as e:
                 logger.error(e)
                 continue
@@ -160,8 +160,8 @@ class ArchiveClass:
                     for file_id in dx.find_data_objects(
                         project=project_id,
                         classname="file",
-                        archival_state='live',
-                        folder='/',
+                        archival_state="live",
+                        folder="/",
                     ):
                         if (
                             file_id in file_ids_to_exclude
@@ -175,11 +175,15 @@ class ArchiveClass:
                         archived_projects.add(project_id)
 
                 else:
-                    logger.info(f"Running in DEBUG mode. Skip archiving {project_id}!")
+                    logger.info(
+                        f"Running in DEBUG mode. Skip archiving {project_id}!"
+                    )
             else:
                 # project not older than ARCHIVE_MODIFIED_MONTH
                 # meaning project has been modified recently, so skip
-                logger.info(f"RECENTLY MODIFIED: {project_name}. Skip archiving!")
+                logger.info(
+                    f"RECENTLY MODIFIED: {project_name}. Skip archiving!"
+                )
                 continue
 
         return archived_projects
@@ -249,14 +253,16 @@ class ArchiveClass:
         # no tag indicating dont archive
         # it will end up here
         excluded_file_ids = self._find_file_ids_that_match_regex(
-            self.env.AUTOMATED_REGEX_EXCLUDE, self.env.PROJECT_52, directory_path
+            self.env.AUTOMATED_REGEX_EXCLUDE,
+            self.env.PROJECT_52,
+            directory_path,
         )
 
         if not self.env.ARCHIVE_DEBUG:  # if running in production
             for file_id in dx.find_data_objects(
                 project=project_id,
                 classname="file",
-                archival_state='live',
+                archival_state="live",
                 folder=directory_path,
             ):
                 if (
@@ -352,7 +358,7 @@ class ArchiveClass:
                     for file_id in dx.find_data_objects(
                         project=project_id,
                         classname="file",
-                        archival_state='live',
+                        archival_state="live",
                         folder=folder_path,
                     ):
                         self._archive_file(file_id, project_id)

@@ -88,7 +88,9 @@ class TagClass:
             tags = [tag.lower() for tag in v["describe"]["tags"]]
 
             if "partial archived" in tags:
-                self._remove_tags_from_project(["partial archived"], project_id)
+                self._remove_tags_from_project(
+                    ["partial archived"], project_id
+                )
 
             self._add_tag_to_project("fully archived", project_id)
 
@@ -124,12 +126,16 @@ class TagClass:
             )
 
             if "archived" in status and "live" in status:
-                if 'fully archived' in tags:  # some files are live
-                    self._remove_tags_from_project(["fully archived"], project_id)
+                if "fully archived" in tags:  # some files are live
+                    self._remove_tags_from_project(
+                        ["fully archived"], project_id
+                    )
                 self._add_tag_to_project("partial archived", project_id)
             elif "live" not in status:  # all files are archived
-                if 'partial archived' in tags:
-                    self._remove_tags_from_project(['partial archived'], project_id)
+                if "partial archived" in tags:
+                    self._remove_tags_from_project(
+                        ["partial archived"], project_id
+                    )
                 self._add_tag_to_project("fully archived", project_id)
             else:
                 # all files are live, no tagging needed

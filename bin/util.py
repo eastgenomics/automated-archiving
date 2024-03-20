@@ -39,7 +39,9 @@ def parse_datetime(args: argparse.Namespace) -> dt.date:
         try:
             datetime = dt.datetime.strptime(args.datetime, "%Y%m%d").date()
         except ValueError:
-            logger.error(f"Invalid datetime format. Use YYYYMMDD. Arg: {args.datetime}")
+            logger.error(
+                f"Invalid datetime format. Use YYYYMMDD. Arg: {args.datetime}"
+            )
 
     return datetime
 
@@ -68,7 +70,7 @@ def older_than(
 
 def get_all_files_in_project(
     project_id: str,
-    folder_path: str = '/',
+    folder_path: str = "/",
 ) -> list:
     """
     Function fetch all files within a folder in a project
@@ -179,8 +181,8 @@ def get_projects_as_dict(project_prefix: str) -> dict:
                     "tags": True,
                     "modified": True,
                     "createdBy": True,
-                    'dataUsage': True,
-                    'archivedDataUsage': True,
+                    "dataUsage": True,
+                    "archivedDataUsage": True,
                 }
             },
         )
@@ -195,7 +197,7 @@ def get_members(config_path) -> dict:
     config.read(config_path)
 
     try:
-        return dict(config.items('members'))
+        return dict(config.items("members"))
     except configparser.NoSectionError as e:
         logger.error(e)
         return {}
