@@ -5,23 +5,28 @@ import datetime as dt
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 
-
 from bin.helper import get_logger
+from bin.environment import EnvironmentVariableClass
 
 logger = get_logger(__name__)
 
 
 class SlackClass:
+    """
+    Slack class to send messages to Slack
+    """
+
+    MAX_LEN = 7995  # NOTE: 7995 is the magic number that slack api can handle
+
     def __init__(
         self,
-        token: str,
-        months: int,
-        debug: bool,
+        env: EnvironmentVariableClass,
+        datetime: dt.date,
     ) -> None:
-        self.token = token
-        self.months = months
-        self.debug = debug
+        self.env = env
+        self.datetime = datetime
 
+        # http session with retry
         self._http = requests.Session()
         self._retries = Retry(
             total=5,
@@ -33,253 +38,236 @@ class SlackClass:
             HTTPAdapter(max_retries=self._retries),
         )
 
-    def _fetch_messages(
-        self,
-        purpose: str,
-        today: str,
-        **kwargs,
-    ) -> str:
-        """
-        Function to return the right message for the given purpose
-
-        Parameters:
-        :param: purpose: decide on which message to return e.g. 002, alert
-        :param: today: date to display on Slack message
-        :param: **kwarg: see below
-
-        :Keyword Arguments:
-            **days_till_archiving `int`
-                only when sending Slack countdown
-            **archiving_date `datetime`
-                most messages
-            **tar_period_start_date `str`
-                earliest period of tar.gz
-            **tar_period_end_date `str`
-                latest period of tar.gz
-            **dnanexus_error `str`
-                error message from dnanexus login
-
-        Return:
-            Slack message based on :param: purpose
-        """
-
-        days_till_archiving: int = kwargs.get("days_till_archiving")
-        archiving_date: dt.datetime = kwargs.get("archiving_date")
-        tar_period_start_date: str = kwargs.get("tar_period_start_date")
-        tar_period_end_date: str = kwargs.get("tar_period_end_date")
-        dnanexus_error: str = kwargs.get("dnanexus_error")
-
-        msgs: dict[str, str] = {
-            "002": (
-                f":redalert: {today} *002 projects to be archived:*"
-                "\n_Please tag `no-archive` or `never-archive` "
-                "in project.Settings.Tags_"
-                f"\n*Archive date: {archiving_date}*"
-            ),
-            "003": (
-                f":redalert: {today} *003 projects to be archived:*"
-                "\n_Please tag `no-archive` or `never-archive` "
-                "in project.Settings.Tags_"
-                f"\n*Archive date: {archiving_date}*"
-            ),
-            "staging52": (
-                f":redalert: {today} "
-                "*Directories in `staging52` to be archived:*"
-                "\n_Please tag `no-archive` or `never-archive` "
-                "in on any file within the directory_"
-                f"\n*Archive date: {archiving_date}*"
-            ),
-            "special-notify": (
-                f":warning: {today} "
-                "*Inactive project or directory to be archived*"
-                "\n_unless re-tag `no-archive`_"
-                f"\n*Archive date: {archiving_date}*"
-            ),
-            "no-archive": (
-                f":male-detective: {today} "
-                "*Projects or directory tagged with `no-archive`:*"
-                "\n_just for your information_"
-            ),
-            "never-archive": (
-                f":female-detective: {today} "
-                "*Projects or directory tagged with `never-archive`:*"
-                "\n_just for your information_"
-            ),
-            "archived": ":closed_book: *Projects or directory archived:*",
-            "countdown": (
-                ":redalert: automated-archiving: "
-                f"{days_till_archiving} day till archiving on {archiving_date}"
-            ),
-            "alert": (
-                "automated-archiving: Error with dxpy token! Error code:\n"
-                f"`{dnanexus_error}`"
-            ),
-            "tar": (
-                "automated-tar-notify: `tar.gz` not modified in the last"
-                f" {self.months} month\nPeriod:"
-                f" {tar_period_start_date} -"
-                f" {tar_period_end_date}\n_Please find complete list of"
-                " file-id below:_"
-            ),
-            "precision": (
-                ":redalert: automated-archiving: "
-                f"Folders to be archived in `precision` projects"
-                f"\n*Archive date: {archiving_date}*"
-            ),
+        # aims and messages
+        self.messages = {
+            "projects2": "002 Projects to be archived.",
+            "projects3": "003 Projects to be archived.",
+            "directories": "Directories in `staging52` to be archived.",
+            "precisions": "Folders to be archived in `precision` projects.",
+            "archived": "Projects or directory archived.",
         }
 
-        return msgs.get(purpose, "No message found")
+    def _get_archiving_date(self) -> dt.date:
+        """
+        Function to fetch next archiving date based on today's date
+        Archiving date is either 1st or 15th of the month
 
-    def post_message_to_slack(
+        Returns:
+            `datetime`: archiving date
+        """
+
+        archiving_date = self.datetime
+
+        if archiving_date.day in [1, 15]:
+            archiving_date += dt.timedelta(1)
+
+        while archiving_date.day not in [1, 15]:
+            archiving_date += dt.timedelta(1)
+
+        return archiving_date
+
+    def post_simple_message_to_slack(
         self,
         channel: str,
-        purpose: str,
-        today: dt.datetime,
-        data: list = [],
-        **kwargs,
+        message: str,
     ) -> None:
         """
-        Request function for slack web api for:
-        (1) send alert msg when dxpy auth failed (alert=True)
-        (2) send to-be-archived notification (default alert=False)
+        Function to send simple message to Slack
 
         Parameters:
-        :param: channel: e.g. egg-alerts, egg-logs
-        :param: purpose: alert, countdown, tar
-        :param: today: datetime to appear in Slack notification
-        :param: data: list of projs or dirs to be archived
-        :param: **kwarg: see below
-
-        :Keyword Arguments:
-            **days_till_archiving `int`
-                only when sending Slack countdown
-            **archiving_date `datetime`
-                most messages
-            **tar_period_start_date `str`
-                earliest period of tar.gz
-            **tar_period_end_date `str`
-                latest period of tar.gz
-            **dnanexus_error `str`
-                error message from dnanexus login
+        :param: channel: `str` channel to send message to
+        :param: message: `str` message to send
         """
 
-        if self.debug:
+        if self.env.ARCHIVE_DEBUG:
             channel: str = "#egg-test"
 
+        response = self._http.post(
+            "https://slack.com/api/chat.postMessage",
+            {
+                "token": self.env.SLACK_TOKEN,
+                "channel": f"{channel}",
+                "text": message,
+            },
+        ).json()
+
+        if response["ok"]:
+            logger.info(f"POST request to {channel} successful")
+        else:
+            # slack api request failed
+            logger.error(response["error"])
+
+    def _send_message_with_pretext(
+        self,
+        channel: str,
+        pretext: str,
+        data: str,
+    ) -> None:
+        """
+        Function to send message with pretext to Slack
+
+        Parameters:
+        :param: channel: `str` channel to send message to
+        :param: pretext: `str` pretext to send
+        :param: data: `str` data to send
+        """
+        try:
+            response = self._http.post(
+                "https://slack.com/api/chat.postMessage",
+                {
+                    "token": self.env.SLACK_TOKEN,
+                    "channel": f"{channel}",
+                    "attachments": json.dumps(
+                        [
+                            {"pretext": pretext, "text": data},
+                        ]
+                    ),
+                },
+            ).json()
+        except Exception as e:
+            logger.error(e)
+
+        if response["ok"]:
+            logger.info(f"POST request to {channel} successful")
+        else:
+            # slack api request failed
+            logger.error(response.get("error"))
+
+    def _send_message_in_chunks(
+        self, channel: str, pretext: str, raw_data: list
+    ) -> None:
+        """
+        Function to _send_message_with_pretext in chunks
+
+        Parameters:
+        :param: channel: `str` channel to send message to
+        :param: pretext: `str` pretext to send
+        :param: raw_data: `list` data to send
+        """
+        chunks = []
+        start = 0
+        end = 1
+
+        # loop through the raw data, combine it with "\n"
+        # until it's less than 7995 characters
+        # then append it to chunks
+
+        for index in range(1, len(raw_data) + 1):
+            chunk = raw_data[start:end]
+
+            if len("\n".join(chunk)) < self.MAX_LEN:
+                end = index
+
+                if end == len(raw_data):
+                    chunks.append(raw_data[start:end])
+            else:
+                chunks.append(
+                    raw_data[start : end - 1],
+                )
+                start = end - 1
+
+        logger.info(f"Sending data in {len(chunks)} chunks")
+
+        for chunk in chunks:
+            text_data = "\n".join(chunk)
+            self._send_message_with_pretext(channel, pretext, text_data)
+
+    def post_long_message_to_slack(
+        self,
+        channel: str,
+        aim: str,
+        raw_data: list = [],
+    ) -> None:
+        """
+        Function to send long message to Slack
+        This function will decide whether to send message in chunks or not
+
+        Parameters:
+        :param: channel: `str` channel to send message to
+        :param: aim: `str` aim to send message to
+        :param: raw_data: `list` data to send
+        """
+
+        if self.env.ARCHIVE_DEBUG:
+            channel: str = "#egg-test"
+
+        if not raw_data:  # no data
+            return
+
         logger.info(
-            f"POST request to channel: {channel} with purpose {purpose}",
+            f"POST request to channel: {channel}",
         )
 
-        strtoday: str = today.strftime("%d/%m/%Y")
+        message: str = self.messages.get(aim)
+        message += f"\nGoing to be archived on {self._get_archiving_date()}"
 
-        message: str = self._fetch_messages(purpose, strtoday, **kwargs)
+        text_data = "\n".join(raw_data)
 
-        try:
-            if purpose in ["alert", "countdown"]:
-                response = self._http.post(
-                    "https://slack.com/api/chat.postMessage",
-                    {
-                        "token": self.token,
-                        "channel": f"{channel}",
-                        "text": message,
-                    },
-                ).json()
-            elif purpose == "tar":
-                # tar-notify requires making a txt file of file-id
-                # then send file as attachment using an enctype
-                # of multipart/form-data
+        # number above 7,995 seems to get truncation
+        if len(text_data) < self.MAX_LEN:
+            self._send_message_with_pretext(channel, message, text_data)
+        else:
+            self._send_message_in_chunks(channel, message, raw_data)
 
-                with open("tar.txt", "w") as f:
-                    for line in data:
-                        txt = "\t".join(line)
-                        f.write(f"{txt}\n")
+    def _send_message_with_attachment(
+        self,
+        data: list,
+        channel: str,
+        message: str,
+    ) -> None:
+        """
+        Function to send message with attachment to Slack
 
-                tar_file = {"file": ("tar.txt", open("tar.txt", "rb"), "txt")}
-                response = self._http.post(
-                    "https://slack.com/api/files.upload",
-                    params={
-                        "token": self.token,
-                        "channels": f"{channel}",
-                        "initial_comment": message,
-                        "filename": "tar.txt",
-                        "filetype": "txt",
-                    },
-                    files=tar_file,
-                ).json()
-            else:
-                # default notification which is an attachment rather than
-                # text (as seen in alert / countdown above)
-                text_data = "\n".join(data)
+        Parameters:
+        :param: data: `list` data to send
+        :param: channel: `str` channel to send message to
+        :param: message: `str` message to send
+        """
+        if self.env.ARCHIVE_DEBUG:
+            channel: str = "#egg-test"
 
-                # number above 7,995 seems to get truncation
-                if len(text_data) < 7995:
-                    response = self._http.post(
-                        "https://slack.com/api/chat.postMessage",
-                        {
-                            "token": self.token,
-                            "channel": f"{channel}",
-                            "attachments": json.dumps(
-                                [
-                                    {"pretext": message, "text": text_data},
-                                ]
-                            ),
-                        },
-                    ).json()
-                else:
-                    # chunk data based on its length after '\n'.join()
-                    # if > than 7,995 after join(), we append
-                    # data[start:end-1] into chunks.
-                    # start = end - 1 and repeat
-                    chunks = []
-                    start = 0
-                    end = 1
+        with open("tar.txt", "w") as f:
+            for line in data:
+                txt = "\t".join(line)
+                f.write(f"{txt}\n")
 
-                    for index in range(1, len(data) + 1):
-                        chunk = data[start:end]
+        response = self._http.post(
+            "https://slack.com/api/files.upload",
+            params={
+                "token": self.env.SLACK_TOKEN,
+                "channels": f"{channel}",
+                "initial_comment": message,
+                "filename": "tar.txt",
+                "filetype": "txt",
+            },
+            files={"file": ("tar.txt", open("tar.txt", "rb"), "txt")},
+        ).json()
 
-                        if len("\n".join(chunk)) < 7995:
-                            end = index
+        if response["ok"]:
+            logger.info(f"POST request to {channel} successful")
+        else:
+            # slack api request failed
+            logger.error(response.get("error"))
 
-                            if end == len(data):
-                                chunks.append(data[start:end])
-                        else:
-                            chunks.append(
-                                data[start : end - 1],
-                            )
-                            start = end - 1
+    def notify(self, aim_to_data: dict) -> None:
+        """
+        Function to notify on Slack based on aim:
+        - tars, archived, precisions, directories, projects2, projects3
 
-                    logger.info(f"Sending data in {len(chunks)} chunks")
-
-                    for chunk in chunks:
-                        text_data = "\n".join(chunk)
-
-                        response = self._http.post(
-                            "https://slack.com/api/chat.postMessage",
-                            {
-                                "token": self.token,
-                                "channel": f"{channel}",
-                                "attachments": json.dumps(
-                                    [{"pretext": message, "text": text_data}]
-                                ),
-                            },
-                        ).json()
-
-                        if not response["ok"]:
-                            break
-
-            if response["ok"]:
-                logger.info(f"POST request to {channel} successful")
-            else:
-                # slack api request failed
-                slack_error = response["error"]
-
-                raise ValueError(
-                    "Error with Slack API or incorrect channel input to"
-                    f" Slack: {slack_error}"
+        Parameters:
+        :param: aim_to_data: `dict` with aim as key and data as value
+        """
+        for aim, data in aim_to_data.items():
+            if aim == "tars":
+                self._send_message_with_attachment(
+                    data,
+                    "#egg-alerts",
+                    f"automated-archiving: `tar.gz` in staging-52 not modified in the last {self.env.TAR_MONTH} months",
                 )
-
-        except Exception as other_exceptions:
-            # endpoint request fail from server-side
-            logger.error(f"Error sending POST request to channel {channel}")
-
-            raise ValueError(other_exceptions)
+            else:
+                if data:
+                    self.post_long_message_to_slack(
+                        "#egg-alerts",
+                        aim,
+                        data,
+                    )
