@@ -16,6 +16,8 @@ class SlackClass:
     Slack class to send messages to Slack
     """
 
+    MAX_LEN = 7995
+
     def __init__(
         self,
         env: EnvironmentVariableClass,
@@ -146,10 +148,15 @@ class SlackClass:
         start = 0
         end = 1
 
+        # loop through the raw data, combine it with "\n"
+        # until it's less than 7995 characters
+        # then append it to chunks
+
+        # NOTE: 7995 is the magic number that slack api can handle
         for index in range(1, len(raw_data) + 1):
             chunk = raw_data[start:end]
 
-            if len("\n".join(chunk)) < 7995:
+            if len("\n".join(chunk)) < self.MAX_LEN:
                 end = index
 
                 if end == len(raw_data):
@@ -198,7 +205,7 @@ class SlackClass:
         text_data = "\n".join(raw_data)
 
         # number above 7,995 seems to get truncation
-        if len(text_data) < 7995:
+        if len(text_data) < self.MAX_LEN:
             self._send_message_with_pretext(channel, message, text_data)
         else:
             self._send_message_in_chunks(channel, message, raw_data)

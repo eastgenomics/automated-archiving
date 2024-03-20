@@ -28,6 +28,7 @@ def main():
     dnanexus_id_to_slack_id = get_members("members.ini")
 
     env = EnvironmentVariableClass()
+    env.load_configs()
 
     # define Slack class
     slack = SlackClass(env, datetime)
@@ -47,12 +48,8 @@ def main():
 
     archive_pickle = read_or_new_pickle(env.AUTOMATED_ARCHIVE_PICKLE_PATH)
 
-    projects_marked_for_archiving: Optional[list] = archive_pickle.get(
-        "projects", []
-    )
-    staging52_directories: Optional[list] = archive_pickle.get(
-        "directories", []
-    )
+    projects_marked_for_archiving: Optional[list] = archive_pickle.get("projects", [])
+    staging52_directories: Optional[list] = archive_pickle.get("directories", [])
     precision_projects: Optional[list] = archive_pickle.get("precisions", [])
 
     tars = find.get_tar()
@@ -60,12 +57,8 @@ def main():
     slack.notify({"tars": tars})
 
     if datetime.day in [1, 15]:
-        archived_project_ids = archive.archive_projects(
-            projects_marked_for_archiving
-        )
-        archived_directories_dict = archive.archive_staging52(
-            staging52_directories
-        )
+        archived_project_ids = archive.archive_projects(projects_marked_for_archiving)
+        archived_directories_dict = archive.archive_staging52(staging52_directories)
         archived_precisions = archive.archive_precisions(precision_projects)
 
         slack.post_long_message_to_slack(

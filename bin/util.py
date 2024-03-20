@@ -39,9 +39,7 @@ def parse_datetime(args: argparse.Namespace) -> dt.date:
         try:
             datetime = dt.datetime.strptime(args.datetime, "%Y%m%d").date()
         except ValueError:
-            logger.error(
-                f"Invalid datetime format. Use YYYYMMDD. Arg: {args.datetime}"
-            )
+            logger.error(f"Invalid datetime format. Use YYYYMMDD. Arg: {args.datetime}")
 
     return datetime
 
@@ -189,9 +187,15 @@ def get_projects_as_dict(project_prefix: str) -> dict:
     }
 
 
-def get_members(config_path) -> dict:
+def get_members(config_path: str) -> dict:
     """
-    Function to read member.ini config file for members' dnanexus id and slack id
+    Function to read members.ini config file for members' dnanexus id and slack id
+
+    Parameters:
+    :param: config_path: path to members.ini file
+
+    Returns:
+    :return: dict: {dnanexus_id: slack_id}
     """
     config = configparser.ConfigParser()
     config.read(config_path)

@@ -43,15 +43,7 @@ class EnvironmentVariableClass:
             "DNANEXUS_URL_PREFIX": "https://platform.dnanexus.com/panx/projects",
         }
 
-        self._load_configs()
-        self._correct_typing()
-        self._process_precision_projects_variable()
-        self._process_regex_exclude_variable()
-        self._debug_variables()
-
-        self._print_variables()
-
-    def _load_configs(self):
+    def load_configs(self):
         """
         Load environment variables into the class instance
 
@@ -66,6 +58,13 @@ class EnvironmentVariableClass:
                 )
 
             setattr(self, variable_name, value or default_value)
+
+        self._correct_typing()
+        self._process_precision_projects_variable()
+        self._process_regex_exclude_variable()
+        self._debug_variables()
+
+        self._print_variables()
 
     def _correct_typing(self):
         """
@@ -87,10 +86,7 @@ class EnvironmentVariableClass:
         Process the precision archiving projects variable
         """
         self.PRECISION_ARCHIVING = (
-            [
-                project_id.strip()
-                for project_id in self.PRECISION_ARCHIVING.split(",")
-            ]
+            [project_id.strip() for project_id in self.PRECISION_ARCHIVING.split(",")]
             if "," in self.PRECISION_ARCHIVING
             else []
         )
@@ -110,9 +106,7 @@ class EnvironmentVariableClass:
         Redefine env variables for debug / testing
         """
         if self.ARCHIVE_DEBUG:
-            self.AUTOMATED_ARCHIVE_PICKLE_PATH = (
-                "/monitoring/archive_dict.test.pickle"
-            )
+            self.AUTOMATED_ARCHIVE_PICKLE_PATH = "/monitoring/archive_dict.test.pickle"
 
     def _print_variables(self):
         """

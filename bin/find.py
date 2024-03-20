@@ -87,7 +87,7 @@ class FindClass:
 
     def _remove_project_tag(self, project_id: str, tag: list) -> None:
         """
-        Functino to remove tag from a project
+        Function to remove tag from a project
 
         Parameters:
         :param: project-id
