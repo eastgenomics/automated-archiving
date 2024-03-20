@@ -16,7 +16,7 @@ class SlackClass:
     Slack class to send messages to Slack
     """
 
-    MAX_LEN = 7995
+    MAX_LEN = 7995  # NOTE: 7995 is the magic number that slack api can handle
 
     def __init__(
         self,
@@ -152,7 +152,6 @@ class SlackClass:
         # until it's less than 7995 characters
         # then append it to chunks
 
-        # NOTE: 7995 is the magic number that slack api can handle
         for index in range(1, len(raw_data) + 1):
             chunk = raw_data[start:end]
 
