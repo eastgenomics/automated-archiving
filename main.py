@@ -73,7 +73,7 @@ def main():
         slack.post_long_message_to_slack(
             '#egg-alerts' 'archived',
             [
-                f"{project_id}:{",".join(folder_path)} archived in `precision`."
+                f"{project_id}:{','.join(folder_path)} archived in `precision`."
                 for project_id, folder_path in archived_precisions.items()
             ],
         )
