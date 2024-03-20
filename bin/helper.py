@@ -6,6 +6,7 @@ directory defined below
 
 """
 
+import os
 import sys
 import logging
 from logging.handlers import TimedRotatingFileHandler
@@ -14,7 +15,7 @@ from logging.handlers import TimedRotatingFileHandler
 FORMATTER = logging.Formatter(
     "%(asctime)s:%(name)s:%(pathname)s:%(lineno)d:%(levelname)s:::%(message)s"
 )
-LOG_FILE = "/monitoring/automated-archiving.log"
+LOGGING_PATH = os.environ.get("ARCHIVING_LOGGING_PATH", "automated-archiving.log")
 
 
 def get_console_handler():
@@ -24,7 +25,7 @@ def get_console_handler():
 
 
 def get_file_handler():
-    file_handler = TimedRotatingFileHandler(LOG_FILE, when="midnight")
+    file_handler = TimedRotatingFileHandler(LOGGING_PATH, when="midnight")
     file_handler.setFormatter(FORMATTER)
     return file_handler
 
