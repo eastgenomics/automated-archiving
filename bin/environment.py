@@ -18,6 +18,7 @@ class EnvironmentVariableClass:
         self.PROJECT_52: str
         self.AUTOMATED_MONTH_002: int
         self.AUTOMATED_MONTH_003: int
+        self.AUTOMATED_CEN_WES_MONTH: int
         self.TAR_MONTH: int
         self.ARCHIVE_MODIFIED_MONTH: int
         self.PRECISION_MONTH: int
@@ -33,6 +34,7 @@ class EnvironmentVariableClass:
             "PROJECT_52": "project-FpVG0G84X7kzq58g19vF1YJQ",
             "AUTOMATED_MONTH_002": 3,
             "AUTOMATED_MONTH_003": 1,
+            "AUTOMATED_CEN_WES_MONTH": 6,
             "TAR_MONTH": 3,
             "ARCHIVE_MODIFIED_MONTH": 1,
             "PRECISION_MONTH": 1,
@@ -73,6 +75,7 @@ class EnvironmentVariableClass:
         for attr in [
             "AUTOMATED_MONTH_002",
             "AUTOMATED_MONTH_003",
+            "AUTOMATED_CEN_WES_MONTH",
             "TAR_MONTH",
             "ARCHIVE_MODIFIED_MONTH",
             "PRECISION_MONTH",
@@ -86,7 +89,10 @@ class EnvironmentVariableClass:
         Process the precision archiving projects variable
         """
         self.PRECISION_ARCHIVING = (
-            [project_id.strip() for project_id in self.PRECISION_ARCHIVING.split(",")]
+            [
+                project_id.strip()
+                for project_id in self.PRECISION_ARCHIVING.split(",")
+            ]
             if "," in self.PRECISION_ARCHIVING
             else []
         )
@@ -106,7 +112,9 @@ class EnvironmentVariableClass:
         Redefine env variables for debug / testing
         """
         if self.ARCHIVE_DEBUG:
-            self.AUTOMATED_ARCHIVE_PICKLE_PATH = "/monitoring/archive_dict.test.pickle"
+            self.AUTOMATED_ARCHIVE_PICKLE_PATH = (
+                "/monitoring/archive_dict.test.pickle"
+            )
 
     def _print_variables(self):
         """
@@ -115,17 +123,10 @@ class EnvironmentVariableClass:
         logger.info(
             pprint.pformat(
                 {
-                    "PROJECT 52": self.PROJECT_52,
-                    "AUTOMATED_MONTH_002": self.AUTOMATED_MONTH_002,
-                    "AUTOMATED_MONTH_003": self.AUTOMATED_MONTH_003,
-                    "TAR_MONTH": self.TAR_MONTH,
-                    "ARCHIVE_MODIFIED_MONTH": self.ARCHIVE_MODIFIED_MONTH,
-                    "PRECISION_MONTH": self.PRECISION_MONTH,
-                    "AUTOMATED_ARCHIVE_PICKLE_PATH": self.AUTOMATED_ARCHIVE_PICKLE_PATH,
-                    "ARCHIVE_DEBUG": self.ARCHIVE_DEBUG,
-                    "AUTOMATED_REGEX_EXCLUDE": self.AUTOMATED_REGEX_EXCLUDE,
-                    "PRECISION_ARCHIVING": self.PRECISION_ARCHIVING,
-                    "DNANEXUS_URL_PREFIX": self.DNANEXUS_URL_PREFIX,
+                    k: v
+                    for k, v in vars(self).items()
+                    if not k
+                    in ["SLACK_TOKEN", "DNANEXUS_TOKEN", "required_variables"]
                 }
             )
         )

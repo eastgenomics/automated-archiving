@@ -23,7 +23,11 @@ def parse_arguments() -> argparse.Namespace:
     )
 
     # optional arguments
-    parser.add_argument("-dt", "--datetime")
+    parser.add_argument(
+        "-dt",
+        "--datetime",
+        help="override script datetime. input format: YYYYMMDD",
+    )
 
     return parser.parse_args()
 
@@ -39,7 +43,9 @@ def parse_datetime(args: argparse.Namespace) -> dt.date:
         try:
             datetime = dt.datetime.strptime(args.datetime, "%Y%m%d").date()
         except ValueError:
-            logger.error(f"Invalid datetime format. Use YYYYMMDD. Arg: {args.datetime}")
+            logger.error(
+                f"Invalid datetime format. Use YYYYMMDD. Arg: {args.datetime}"
+            )
 
     return datetime
 
@@ -177,6 +183,7 @@ def get_projects_as_dict(project_prefix: str) -> dict:
                 "fields": {
                     "name": True,
                     "tags": True,
+                    "created": True,
                     "modified": True,
                     "createdBy": True,
                     "dataUsage": True,
