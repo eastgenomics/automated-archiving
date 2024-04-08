@@ -100,7 +100,7 @@ class FindClass:
                             self.env.ARCHIVE_MODIFIED_MONTH,
                             v["describe"]["modified"],
                         )
-                    ) # not modified in the last ARCHIVE_MODIFIED_MONTH
+                    )  # not modified in the last ARCHIVE_MODIFIED_MONTH
                 )
                 or "archive" in v["describe"]["tags"]  # has 'archive' tag
             )
