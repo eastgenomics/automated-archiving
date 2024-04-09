@@ -45,7 +45,8 @@ class FindClass:
     ) -> dict:
         """
         Function to get all 002 and 003 projects
-        - that are old enough
+        - that are old enough (based on AUTOMATED_MONTH_002 and AUTOMATED_MONTH_003)
+            - CEN/WES projects are old enough based on AUTOMATED_CEN_WES_MONTH
         - that are not fully archived
         - that have `archive` tag
 

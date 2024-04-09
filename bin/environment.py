@@ -118,7 +118,7 @@ class EnvironmentVariableClass:
 
     def _print_variables(self):
         """
-        Print all the variables
+        Print all the variables except for sensitive ones (auth tokens)
         """
         logger.info(
             pprint.pformat(
