@@ -4,7 +4,7 @@
 
 ## Summary
 This script automates archiving projects and directories on DNAnexus platform - runs on the 1st and 15th of each month. 
-It finds 002 / 003 projects, directories in 001_stagingarea52 and directories in precision brain projects which fit the pre-determined criteria for archiving, send notitification to Slack and perform archiving in the next run.
+It finds 002 / 003 projects, directories in 001_stagingarea52 and directories in precision brain projects which fit the pre-determined criteria for archiving, send notification to Slack and perform archiving in the next run.
 
 ## What does the script do
 Check for 002 003 projects, directories in staging52, folders in "precision" projects which are not modified in the last X months (inactive) and send Slack notification to notify. Archiving happens on the next run (for example, if project A is notified for archiving on Slack on the 1st, it will be archived on the 15th when the script runs again)
