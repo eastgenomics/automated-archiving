@@ -45,7 +45,8 @@ class FindClass:
     ) -> dict:
         """
         Function to get all 002 and 003 projects
-        - that are old enough
+        - that are old enough (based on AUTOMATED_MONTH_002 and AUTOMATED_MONTH_003)
+            - CEN/WES projects are old enough based on AUTOMATED_CEN_WES_MONTH
         - that are not fully archived
         - that have `archive` tag
 
@@ -64,18 +65,43 @@ class FindClass:
             if (
                 (
                     (
+                        (
+                            older_than(
+                                self.env.AUTOMATED_MONTH_002,
+                                v["describe"]["created"],
+                            )
+                            if v["describe"]["name"].startswith("002")
+                            and not (
+                                v["describe"]["name"].endswith("WES")
+                                or v["describe"]["name"].endswith("CEN")
+                            )
+                            else (
+                                older_than(
+                                    self.env.AUTOMATED_CEN_WES_MONTH,
+                                    v["describe"]["created"],
+                                )
+                                if v["describe"]["name"].startswith("002")
+                                and (
+                                    v["describe"]["name"].endswith("WES")
+                                    or v["describe"]["name"].endswith("CEN")
+                                )
+                                else older_than(
+                                    self.env.AUTOMATED_MONTH_003,
+                                    v["describe"]["created"],
+                                )
+                            )
+                        )  # old enough logic
+                        and v["describe"]["dataUsage"]
+                        != v["describe"][
+                            "archivedDataUsage"
+                        ]  # not fully archived
+                    )
+                    and (
                         older_than(
-                            self.env.AUTOMATED_MONTH_002,
+                            self.env.ARCHIVE_MODIFIED_MONTH,
                             v["describe"]["modified"],
                         )
-                        if v["describe"]["name"].startswith("002")
-                        else older_than(
-                            self.env.AUTOMATED_MONTH_003,
-                            v["describe"]["modified"],
-                        )
-                    )  # old enough logic
-                    and v["describe"]["dataUsage"]
-                    != v["describe"]["archivedDataUsage"]  # not fully archived
+                    )  # not modified in the last ARCHIVE_MODIFIED_MONTH
                 )
                 or "archive" in v["describe"]["tags"]  # has 'archive' tag
             )

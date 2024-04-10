@@ -2,16 +2,18 @@
 
 #### python v3.8.17
 
-## What does the script do
-Check for 002 003 projects, directories in staging52, folders in "precision" projects which are not modified in the last X months (inactive) and send Slack notification to notify. Archiving only happens on 1st or 15th of the month.
+## Summary
+This script automates archiving projects and directories on DNAnexus platform - runs on the 1st and 15th of each month. 
+It finds 002 / 003 projects, directories in 001_stagingarea52 and directories in precision brain projects which fit the pre-determined criteria for archiving, send notification to Slack and perform archiving in the next run.
 
-Tag `no-archive` in projects.setting to skip archiving temporarily.
+## What does the script do
+Check for 002 003 projects, directories in staging52, folders in "precision" projects which are not modified in the last X months (inactive) and send Slack notification to notify. Archiving happens on the next run (for example, if project A is notified for archiving on Slack on the 1st, it will be archived on the 15th when the script runs again)
+
 Tag `never-archive` in projects.setting to skip archiving permanently.
-Tag `no-archive` or `never-archive` in a file in directories in staging-52 to skip archiving.
+Tag `never-archive` in a file in directories in staging-52 to skip archiving for that directory.
 
 ## Typical use case
-Check for archivable projects or directories or folders in "precision" projects on DNANexus & send Slack notification
-Archive on 1st or 15th of the month
+Check for archivable projects or directories or folders in "precision" projects on DNANexus, send Slack notification and archive them.
 
 ## Archive Pickle
 The script generates a pickle file at location specified at `AUTOMATED_ARCHIVE_PICKLE_PATH`.
@@ -24,7 +26,7 @@ The script requires `members.ini` with section [members]. See example in repo. M
 ```
 
 ## Workflow
-1. If 1st or 15th, check memory for archivable projects, directories, precision folders
+1. If 1st or 15th, check memory (pickle) for archivable projects, directories, precision folders
     - if yes, run archiving.
 2. Find archivable projects
 3. Send Slack notification on those projects
@@ -42,8 +44,9 @@ The script requires `members.ini` with section [members]. See example in repo. M
 - `DNANEXUS_TOKEN` : DNANexus API Token
 - `PROJECT_52` : staging52 project-id
 #### general envs
-- `AUTOMATED_MONTH_002` : period (in months) before being marked for archiving (e.g. 6) for 002 projects
-- `AUTOMATED_MONTH_003` : period (in months) before being marked for archiving (e.g. 3) for 003 projects
+- `AUTOMATED_MONTH_002` : period (in months) before being marked for archiving (e.g. 3) for 002 projects
+- `AUTOMATED_MONTH_003` : period (in months) before being marked for archiving (e.g. 1) for 003 projects
+- `AUTOMATED_CEN_WES_MONTH`: period (in months) before being marked for archiving (e.g. 6) for CEN/WES projects
 - `AUTOMATED_ARCHIVE_PICKLE_PATH` : pickle file (memory) directory pathway
 - `ARCHIVING_LOGGING_PATH`: path for logging
 - `TAR_MONTH`: period (in months) for `tar.gz` being inactive to be considered 'old enough'
