@@ -129,12 +129,8 @@ class ArchiveClass:
             tags = project_detail.get("tags", [])
 
             # check their tags
-            if ("never-archive" in tags) or ("no-archive" in tags):
-                # project has been tagged never-archive or no-archive
-                # normally project listed for archiving in memory
-                # will not have no-archive tag to it
-                # if there is, it means a user intentionally
-                # tagged it thus we skip
+            if "never-archive" in tags:
+                # project has been tagged never-archive, skip
                 logger.info(f"NEVER ARCHIVE: {project_name}. Skip archiving!")
                 continue
 
@@ -233,20 +229,6 @@ class ArchiveClass:
 
         if recent_modified:
             logger.info(f"RECENTLY MODIFIED: {directory_path} in {project_id}")
-            return archived_count
-
-        # check for 'no-archive' tag in directory
-        no_archive = list(
-            dx.find_data_objects(
-                project=self.env.PROJECT_52,
-                folder=directory_path,
-                tags=["no-archive"],
-                limit=1,
-            )
-        )
-
-        if no_archive:
-            logger.info(f"NO ARCHIVE: {directory_path} in staging52")
             return archived_count
 
         # if directory in staging52 got

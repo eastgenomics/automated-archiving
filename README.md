@@ -63,29 +63,15 @@ The main logging script is `helper.py`
 The script will generate a log file `automated-archiving.log` in `ARCHIVING_LOGGING_PATH`
 
 ## Tags
-There are 3 tags recognized by the script:
-- `no-archive`
+There are 2 tags recognized by the script:
 - `never-archive`
 - `archive`
-
-#### #no-archive
-Projects tagged will temporarily bypass archiving. 
-
-For directories in Staging52, if one file within a directory (`/210202_A12905_003`) is tagged, the whole directory will temporarily bypass archiving. 
-
-The tag will be removed if its parent project (002 or 003) remains inactive for X months (`MONTH_002`)
 
 #### #never-archive
 Projects tagged will bypass archiving indefintely, same goes to any directory within staging52.
 
 #### #archive
 Tagged project will be listed for archiving, regardless of modified date
-
-## Tagging Function
-Script will check each project (002, 003) and add archival status tags:
-- `fully archived`
-- `partial archived`
-
 
 ## Docker
 `Dockerfile` is included for rebuilding docker image
