@@ -111,24 +111,6 @@ class FindClass:
 
         return filtered_projects
 
-    def _remove_project_tag(self, project_id: str, tag: list) -> None:
-        """
-        Function to remove tag from a project
-
-        Parameters:
-        :param: project-id
-        :param: tag to remove e.g. ['no-archive]
-        """
-
-        logger.info(f"Removing tag '{tag}' from {project_id}")
-        try:
-            dx.api.project_remove_tags(
-                project_id,
-                input_params={"tags": [tag]},
-            )
-        except Exception as e:
-            logger.error(e)
-
     def _get_folders_in_project(
         self,
         project_id: str,
@@ -254,13 +236,6 @@ class FindClass:
             else:
                 logger.info(f"Everything archived in {project_id}. Skip.")
                 continue  # everything has been archived
-
-            if "no-archive" in tags:
-                if not self.env.ARCHIVE_DEBUG:
-                    # project is old enough + have 'no-archive' tag
-                    # thus, we remove the tag and
-                    # list it in special-notify list
-                    self._remove_project_tag(project_id, "no-archive")
 
             # add project-id to archiving list (002 and 003)
             self.archiving_projects.append(project_id)
