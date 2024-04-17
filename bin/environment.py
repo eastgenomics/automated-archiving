@@ -27,6 +27,7 @@ class EnvironmentVariableClass:
         self.AUTOMATED_REGEX_EXCLUDE: list[str]
         self.PRECISION_ARCHIVING: list[str]
         self.DNANEXUS_URL_PREFIX: str
+        self.GUIDELINE_URL: str
 
         self.required_variables = {
             "SLACK_TOKEN": None,
@@ -43,6 +44,7 @@ class EnvironmentVariableClass:
             "AUTOMATED_REGEX_EXCLUDE": None,
             "PRECISION_ARCHIVING": None,
             "DNANEXUS_URL_PREFIX": "https://platform.dnanexus.com/panx/projects",
+            "GUIDELINE_URL": "https://cuhbioinformatics.atlassian.net/l/cp/Uh8PmK0T"
         }
 
     def load_configs(self):

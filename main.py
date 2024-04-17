@@ -92,6 +92,11 @@ def main():
 
     find.save_to_pickle()
 
+    slack.post_simple_message_to_slack(
+            "#egg-alerts",
+            f"automated-archiving guideline: {env.GUIDELINE_URL}",
+        )
+
     slack.notify(
         {
             "projects2": find.archiving_projects_2_slack,

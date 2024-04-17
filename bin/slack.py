@@ -257,6 +257,7 @@ class SlackClass:
         Parameters:
         :param: aim_to_data: `dict` with aim as key and data as value
         """
+
         for aim, data in aim_to_data.items():
             if aim == "tars":
                 self._send_message_with_attachment(
