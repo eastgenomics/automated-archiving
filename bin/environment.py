@@ -44,7 +44,7 @@ class EnvironmentVariableClass:
             "AUTOMATED_REGEX_EXCLUDE": None,
             "PRECISION_ARCHIVING": None,
             "DNANEXUS_URL_PREFIX": "https://platform.dnanexus.com/panx/projects",
-            "GUIDELINE_URL": "https://cuhbioinformatics.atlassian.net/l/cp/Uh8PmK0T"
+            "GUIDELINE_URL": "https://cuhbioinformatics.atlassian.net/l/cp/Uh8PmK0T",
         }
 
     def load_configs(self):

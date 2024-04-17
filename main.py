@@ -93,9 +93,9 @@ def main():
     find.save_to_pickle()
 
     slack.post_simple_message_to_slack(
-            "#egg-alerts",
-            f"automated-archiving guideline: {env.GUIDELINE_URL}",
-        )
+        "#egg-alerts",
+        f"automated-archiving guideline: {env.GUIDELINE_URL}",
+    )
 
     slack.notify(
         {
