@@ -31,7 +31,7 @@ class SlackClass:
         self._retries = Retry(
             total=5,
             backoff_factor=10,
-            method_whitelist=["POST"],
+            allowed_methods=["POST"],  #
         )
         self._http.mount(
             "https://",
