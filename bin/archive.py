@@ -161,22 +161,26 @@ class ArchiveClass:
                         folder="/",
                     ):
                         if (
-                            file['id'] in file_ids_to_exclude
+                            file["id"] in file_ids_to_exclude
                         ):  # skip file-id that match exclude regex
                             continue
 
-                        self._archive_file(file['id'], project_id)
+                        self._archive_file(file["id"], project_id)
                         archived = True
 
                     if archived:
                         archived_projects.add(project_id)
 
                 else:
-                    logger.info(f"Running in DEBUG mode. Skip archiving {project_id}!")
+                    logger.info(
+                        f"Running in DEBUG mode. Skip archiving {project_id}!"
+                    )
             else:
                 # project not older than ARCHIVE_MODIFIED_MONTH
                 # meaning project has been modified recently, so skip
-                logger.info(f"RECENTLY MODIFIED: {project_name}. Skip archiving!")
+                logger.info(
+                    f"RECENTLY MODIFIED: {project_name}. Skip archiving!"
+                )
                 continue
 
         return archived_projects
@@ -245,11 +249,11 @@ class ArchiveClass:
                 folder=directory_path,
             ):
                 if (
-                    file['id'] in excluded_file_ids
+                    file["id"] in excluded_file_ids
                 ):  # skip file-id that match exclude regex
                     continue
 
-                self._archive_file(file['id'], project_id)
+                self._archive_file(file["id"], project_id)
 
                 archived_count += 1
         else:
@@ -340,7 +344,7 @@ class ArchiveClass:
                         archival_state="live",
                         folder=folder_path,
                     ):
-                        self._archive_file(file['id'], project_id)
+                        self._archive_file(file["id"], project_id)
 
                     archived_precisions[project_id].append(folder_path)
                 else:
