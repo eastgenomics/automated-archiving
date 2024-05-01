@@ -260,11 +260,12 @@ class SlackClass:
 
         for aim, data in aim_to_data.items():
             if aim == "tars":
-                self._send_message_with_attachment(
-                    data,
-                    "#egg-alerts",
-                    f"automated-archiving: `tar.gz` in staging-52 not modified in the last {self.env.TAR_MONTH} months",
-                )
+                if data:
+                    self._send_message_with_attachment(
+                        data,
+                        "#egg-alerts",
+                        f"automated-archiving: `tar.gz` in staging-52 not modified in the last {self.env.TAR_MONTH} months",
+                    )
             else:
                 if data:
                     self.post_long_message_to_slack(

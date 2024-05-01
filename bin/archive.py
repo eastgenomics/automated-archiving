@@ -40,6 +40,7 @@ class ArchiveClass:
             return None
 
     def _find_file_ids_that_match_regex(
+        self,
         regexes: list,
         project_id: str,
         directory_path: str = None,
@@ -171,15 +172,11 @@ class ArchiveClass:
                         archived_projects.add(project_id)
 
                 else:
-                    logger.info(
-                        f"Running in DEBUG mode. Skip archiving {project_id}!"
-                    )
+                    logger.info(f"Running in DEBUG mode. Skip archiving {project_id}!")
             else:
                 # project not older than ARCHIVE_MODIFIED_MONTH
                 # meaning project has been modified recently, so skip
-                logger.info(
-                    f"RECENTLY MODIFIED: {project_name}. Skip archiving!"
-                )
+                logger.info(f"RECENTLY MODIFIED: {project_name}. Skip archiving!")
                 continue
 
         return archived_projects
@@ -273,7 +270,7 @@ class ArchiveClass:
         """
 
         archived_dict = {}
-        logger.info(f"{len(directory)} directories found for archiving.")
+        logger.info(f"{len(directory_list)} directories found for archiving.")
 
         # directories in to-be-archived list in stagingarea52
         for index, directory in enumerate(directory_list):
