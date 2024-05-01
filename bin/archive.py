@@ -40,6 +40,7 @@ class ArchiveClass:
             return None
 
     def _find_file_ids_that_match_regex(
+        self,
         regexes: list,
         project_id: str,
         directory_path: str = None,
@@ -153,18 +154,18 @@ class ArchiveClass:
                 if not self.env.ARCHIVE_DEBUG:  # if running in production
                     archived = False
 
-                    for file_id in dx.find_data_objects(
+                    for file in dx.find_data_objects(
                         project=project_id,
                         classname="file",
                         archival_state="live",
                         folder="/",
                     ):
                         if (
-                            file_id in file_ids_to_exclude
+                            file["id"] in file_ids_to_exclude
                         ):  # skip file-id that match exclude regex
                             continue
 
-                        self._archive_file(file_id, project_id)
+                        self._archive_file(file["id"], project_id)
                         archived = True
 
                     if archived:
@@ -241,18 +242,18 @@ class ArchiveClass:
         )
 
         if not self.env.ARCHIVE_DEBUG:  # if running in production
-            for file_id in dx.find_data_objects(
+            for file in dx.find_data_objects(
                 project=project_id,
                 classname="file",
                 archival_state="live",
                 folder=directory_path,
             ):
                 if (
-                    file_id in excluded_file_ids
+                    file["id"] in excluded_file_ids
                 ):  # skip file-id that match exclude regex
                     continue
 
-                self._archive_file(file_id, project_id)
+                self._archive_file(file["id"], project_id)
 
                 archived_count += 1
         else:
@@ -273,7 +274,7 @@ class ArchiveClass:
         """
 
         archived_dict = {}
-        logger.info(f"{len(directory)} directories found for archiving.")
+        logger.info(f"{len(directory_list)} directories found for archiving.")
 
         # directories in to-be-archived list in stagingarea52
         for index, directory in enumerate(directory_list):
@@ -337,13 +338,13 @@ class ArchiveClass:
                 # archive the folder in the project-id
                 if not self.env.ARCHIVE_DEBUG:
                     # archive the folder
-                    for file_id in dx.find_data_objects(
+                    for file in dx.find_data_objects(
                         project=project_id,
                         classname="file",
                         archival_state="live",
                         folder=folder_path,
                     ):
-                        self._archive_file(file_id, project_id)
+                        self._archive_file(file["id"], project_id)
 
                     archived_precisions[project_id].append(folder_path)
                 else:

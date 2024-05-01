@@ -33,7 +33,7 @@ def main():
     slack = SlackClass(env, datetime)
 
     # define Archive class
-    archive = ArchiveClass(env.ARCHIVE_DEBUG)
+    archive = ArchiveClass(env)
 
     # define Find class
     find = FindClass(env, dnanexus_id_to_slack_id)
