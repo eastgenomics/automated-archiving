@@ -31,7 +31,7 @@ class ArchiveClass:
             # if project-id no longer exist on DNAnexus
             # probably project got deleted or etc.
             # causing this part to fail
-            logger.info(f"{project_id} seems to be missing" f"{e}")
+            logger.info(f"{project_id} seems to be missing. {e}")
             return None
         except Exception as e:
             # no idea what kind of exception DNAnexus will give
@@ -170,17 +170,14 @@ class ArchiveClass:
 
                     if archived:
                         archived_projects.add(project_id)
+                        logger.info(f'{project_id} archived!')
 
                 else:
-                    logger.info(
-                        f"Running in DEBUG mode. Skip archiving {project_id}!"
-                    )
+                    logger.info(f"Running in DEBUG mode. Skip archiving {project_id}!")
             else:
                 # project not older than ARCHIVE_MODIFIED_MONTH
                 # meaning project has been modified recently, so skip
-                logger.info(
-                    f"RECENTLY MODIFIED: {project_name}. Skip archiving!"
-                )
+                logger.info(f"RECENTLY MODIFIED: {project_name}. Skip archiving!")
                 continue
 
         return archived_projects
@@ -256,6 +253,11 @@ class ArchiveClass:
                 self._archive_file(file["id"], project_id)
 
                 archived_count += 1
+
+            if archived_count > 0:
+                logger.info(
+                    f'{archived_count} files archived in {directory_path} in {project_id}'
+                )
         else:
             logger.info(
                 f"Running in DEBUG mode. Skip archiving {directory_path} in {project_id}!"
@@ -347,6 +349,7 @@ class ArchiveClass:
                         self._archive_file(file["id"], project_id)
 
                     archived_precisions[project_id].append(folder_path)
+                    logger.info(f"{project_id}:{folder_path} archived!")
                 else:
                     logger.info("Debug mode, Skip archiving..")
 

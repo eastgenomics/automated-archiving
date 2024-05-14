@@ -191,12 +191,13 @@ class SlackClass:
         if self.env.ARCHIVE_DEBUG:
             channel: str = "#egg-test"
 
-        if not raw_data:  # no data
-            return
-
         logger.info(
             f"POST request to channel: {channel}",
         )
+
+        if not raw_data:  # no data
+            logger.info(f"No data to send to channel: {channel} for aim: {aim}")
+            return
 
         message: str = self.messages.get(aim)
         message += f"\nGoing to be archived on {self._get_archiving_date()}"
