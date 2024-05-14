@@ -170,7 +170,7 @@ class ArchiveClass:
 
                     if archived:
                         archived_projects.add(project_id)
-                        logger.info(f'{project_id} archived!')
+                        logger.info(f"{project_id} archived!")
 
                 else:
                     logger.info(f"Running in DEBUG mode. Skip archiving {project_id}!")
@@ -256,7 +256,7 @@ class ArchiveClass:
 
             if archived_count > 0:
                 logger.info(
-                    f'{archived_count} files archived in {directory_path} in {project_id}'
+                    f"{archived_count} files archived in {directory_path} in {project_id}"
                 )
         else:
             logger.info(

@@ -196,7 +196,9 @@ class SlackClass:
         )
 
         if not raw_data:  # no data
-            logger.info(f"No data to send to channel: {channel} for aim: {aim}")
+            logger.info(
+                f"No data to send to channel: {channel} for aim: {aim}"
+            )
             return
 
         message: str = self.messages.get(aim)
