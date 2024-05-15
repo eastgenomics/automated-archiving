@@ -173,11 +173,15 @@ class ArchiveClass:
                         logger.info(f"{project_id} archived!")
 
                 else:
-                    logger.info(f"Running in DEBUG mode. Skip archiving {project_id}!")
+                    logger.info(
+                        f"Running in DEBUG mode. Skip archiving {project_id}!"
+                    )
             else:
                 # project not older than ARCHIVE_MODIFIED_MONTH
                 # meaning project has been modified recently, so skip
-                logger.info(f"RECENTLY MODIFIED: {project_name}. Skip archiving!")
+                logger.info(
+                    f"RECENTLY MODIFIED: {project_name}. Skip archiving!"
+                )
                 continue
 
         return archived_projects
