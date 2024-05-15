@@ -304,9 +304,9 @@ class FindClass:
         for folder in self._get_folders_in_project(
             self.env.PROJECT_52, directory_path="/processed"
         ):
-            trimmed_to_original_folder_path[
-                folder.lstrip("/processed/")
-            ] = folder
+            trimmed_to_original_folder_path[folder.lstrip("/processed/")] = (
+                folder
+            )
 
         logger.info(
             f"Found {len(trimmed_to_original_folder_path)} directories in staging-52"
@@ -422,7 +422,7 @@ class FindClass:
                 active_files = [
                     file
                     for file in files
-                    if file["describe"]["archivalState"] != "archived"
+                    if file["describe"]["archivalState"] == "live"
                 ]  # only process those that are not archived
 
                 if not active_files:  # no active file, everything archived
@@ -457,9 +457,9 @@ class FindClass:
 
         self.archive_pickle["projects"] = self.archiving_projects
         self.archive_pickle["directories"] = self.archiving_directories
-        self.archive_pickle[
-            "precisions"
-        ] = self.archiving_precision_directories
+        self.archive_pickle["precisions"] = (
+            self.archiving_precision_directories
+        )
 
         write_to_pickle(
             self.env.AUTOMATED_ARCHIVE_PICKLE_PATH, self.archive_pickle
