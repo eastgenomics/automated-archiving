@@ -3,6 +3,7 @@ import collections
 import dxpy as dx
 import datetime as dt
 import concurrent
+from itertools import groupby
 
 from bin.environment import EnvironmentVariableClass
 from bin.helper import get_logger
@@ -17,7 +18,7 @@ from bin.util import (
 logger = get_logger(__name__)
 
 
-def find_in_parallel(project, items, prefix='', suffix='', month_modified_before=None) -> list:
+def find_names_in_parallel(project, items, prefix='', suffix='', month_modified_before=None) -> list:
     """
     Call dxpy.find_data_objects in parallel for given list of `items`.
 
@@ -257,6 +258,55 @@ class FindClass:
 
         return False
 
+
+    def get_archival_status_parallel(self, projects) -> list:
+        """
+        Call dxpy.find_data_objects in parallel.
+
+        Adapted from dias_reports_bulk_reanalysis.
+
+        Parameters
+        ----------
+        projects : list
+            project IDs in which to restrict search scope
+        
+        Returns
+        -------
+        list
+            list of all found dxpy object details
+        """
+        def _find(project):
+            """
+            Query given patterns as a regex search term to find all files
+            """
+            return list(dx.find_data_objects(
+                project=project,
+                describe={
+                    'fields': {'archivalState': True}
+                    }
+                    )
+                    )
+
+        results = []
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
+            concurrent_jobs = {
+                executor.submit(_find, project) for project in projects
+            }
+
+            for future in concurrent.futures.as_completed(concurrent_jobs):
+                # access returned output as each is returned in any order
+                try:
+                    results.extend(future.result())
+
+                except Exception as exc:
+                    # catch any errors that might get raised during querying
+                    print(
+                        f"Error getting data for {future}: {exc}"
+                    )
+                    raise exc
+        return results
+
     def find_projects(
         self,
     ) -> None:
@@ -273,8 +323,14 @@ class FindClass:
         logger.info(
             f"Number of 'old enough' projects found: {len(qualified_projects)}!"
         )
-
+        
         user_to_project_id_and_dnanexus = collections.defaultdict(list)
+
+        # get archival statuses for each project
+        archival_statuses = self.get_archival_status_parallel(qualified_projects)
+        archival_statuses = {
+            k: list(v) for k, v in groupby(archival_statuses, lambda x: x["project"])
+        }
 
         for index, (project_id, v) in enumerate(qualified_projects.items()):
             if (index + 1) % 25 == 0:
@@ -294,18 +350,9 @@ class FindClass:
                 continue  # project tagged with 'never-archive'
 
             # get all files' archivalStatus
-            # TODO: parallelise
-            all_files = list(
-                dx.find_data_objects(
-                    classname="file",
-                    project=project_id,
-                    describe={
-                        "fields": {"archivalState": True},
-                    },
-                )
-            )
+            project_statuses = archival_statuses.get(project_id)
             statuses = set(
-                [x["describe"]["archivalState"] for x in all_files],
+                [x["describe"]["archivalState"] for x in project_statuses],
             )
 
             if "live" in statuses:
@@ -543,9 +590,6 @@ class FindClass:
             self.env.AUTOMATED_ARCHIVE_PICKLE_PATH, self.archive_pickle
         )
 
-
-
-
     def get_tar(self) -> list:
         """
         Function to get all .tar files in staging-52 that fits below criteria:
@@ -557,8 +601,10 @@ class FindClass:
         logger.info("Getting all .tar files in staging-52..")
 
         # list of tar files not modified in the last 3 months
-        tars = find_in_parallel(
-            self.env.PROJECT_52, "^run.*.tar.gz", month_modified_before=self.env.TAR_MONTH
+        tars = find_names_in_parallel(
+            self.env.PROJECT_52,
+            name="^run.*.tar.gz",
+            month_modified_before=self.env.TAR_MONTH
             )
 
         if not tars:
