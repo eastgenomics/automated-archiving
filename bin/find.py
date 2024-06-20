@@ -2,6 +2,7 @@ import itertools
 import collections
 import dxpy as dx
 import datetime as dt
+import concurrent
 
 from bin.environment import EnvironmentVariableClass
 from bin.helper import get_logger
@@ -14,6 +15,80 @@ from bin.util import (
 )
 
 logger = get_logger(__name__)
+
+
+def find_in_parallel(project, items, prefix='', suffix='', month_modified_before=None) -> list:
+    """
+    Call dxpy.find_data_objects in parallel for given list of `items`.
+
+    All items in list are chunked into max 100 items and queried in one
+    go as a regex pattern for more efficient querying
+
+    Stolen from dias_reports_bulk_reanalysis.
+
+    Parameters
+    ----------
+    project : str
+        project ID in which to restrict search scope
+    items : list
+        list of search terms to search for
+    prefix : str
+        optional prefix string for searching
+    suffix : str
+        optional suffix string for searching
+    modified_before : str
+        optional modified_before search term. See dxpy_search for note on accepted formats
+
+    Returns
+    -------
+    list
+        list of all found dxpy object details
+    """
+    def _find(project, search_term):
+        """Query given patterns as a regex search term to find all files"""
+        return list(dx.find_data_objects(
+            project=project,
+            name=rf'{prefix}{"|".join(search_term)}{suffix}',
+            name_mode='regexp',
+            modified_before=month_modified_before,
+            describe={
+                'fields': {
+                    'modified': True,
+                    'folder': True,
+                    'name': True,
+                    # 'archivalState': True,
+                    # 'createdBy': True
+            }
+        }
+    ))
+
+    results = []
+
+    # make the plain-number month value compatible with 'modified_before'
+    # argument in find_data_objects
+    month_modified_before = f"-{month_modified_before}m"
+
+    # create chunks of 100 items from list for querying
+    chunked_items = [items[i:i + 100] for i in range(0, len(items), 100)]
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
+        concurrent_jobs = {
+            executor.submit(_find, project, item) for item in chunked_items
+        }
+
+        for future in concurrent.futures.as_completed(concurrent_jobs):
+            # access returned output as each is returned in any order
+            try:
+                results.extend(future.result())
+
+            except Exception as exc:
+                # catch any errors that might get raised during querying
+                print(
+                    f"Error getting data for {future}: {exc}"
+                )
+                raise exc
+
+    return results
 
 
 class FindClass:
@@ -39,6 +114,7 @@ class FindClass:
         self.archive_pickle = read_or_new_pickle(
             env.AUTOMATED_ARCHIVE_PICKLE_PATH
         )
+
 
     def _get_old_enough_projects(
         self,
@@ -218,6 +294,7 @@ class FindClass:
                 continue  # project tagged with 'never-archive'
 
             # get all files' archivalStatus
+            # TODO: parallelise
             all_files = list(
                 dx.find_data_objects(
                     classname="file",
@@ -337,6 +414,7 @@ class FindClass:
                     f"Processing {index + 1}/{len(trimmed_to_original_folder_path)}"
                 )
 
+            # TODO: parallelise
             project_files = list(
                 dx.find_data_objects(
                     classname="file",
@@ -465,6 +543,9 @@ class FindClass:
             self.env.AUTOMATED_ARCHIVE_PICKLE_PATH, self.archive_pickle
         )
 
+
+
+
     def get_tar(self) -> list:
         """
         Function to get all .tar files in staging-52 that fits below criteria:
@@ -476,22 +557,9 @@ class FindClass:
         logger.info("Getting all .tar files in staging-52..")
 
         # list of tar files not modified in the last 3 months
-        tars = [
-            f
-            for f in dx.find_data_objects(
-                name="^run.*.tar.gz",
-                name_mode="regexp",
-                describe={
-                    "fields": {
-                        "modified": True,
-                        "folder": True,
-                        "name": True,
-                    },
-                },
-                project=self.env.PROJECT_52,
+        tars = find_in_parallel(
+            self.env.PROJECT_52, "^run.*.tar.gz", month_modified_before=self.env.TAR_MONTH
             )
-            if older_than(self.env.TAR_MONTH, f["describe"]["modified"])
-        ]
 
         if not tars:
             # no .tar older than tar_month
