@@ -6,6 +6,7 @@ from dateutil.relativedelta import relativedelta
 import dxpy as dx
 import argparse
 import configparser
+import concurrent
 
 from bin.helper import get_logger
 
@@ -71,6 +72,46 @@ def older_than(
 
     return date + relativedelta(months=+month) < dt.datetime.today()
 
+
+def call_in_parallel(func, fixed_vars, items) -> list:
+    """
+    Calls the given function in parallel using concurrent.futures on
+    the given set of items (i.e for calling dxpy.describe() on multiple
+    object IDs)
+    Borrowed from dias_reports_bulk_reanalysis
+
+    Parameters
+    ----------
+    func : callable
+        function to call on each item
+    fixed_vars : dictionary
+        a dictionary representing variables that get passed to func
+        every time, without iterating
+    items : list
+        list of items to call function on
+
+    Returns
+    -------
+    list
+        list of responses
+    """
+    results = []
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
+        concurrent_jobs = {executor.submit(func, fixed_vars, item): item for item in items}
+
+        for future in concurrent.futures.as_completed(concurrent_jobs):
+            # access returned output as each is returned in any order
+            try:
+                results.append(future.result())
+            except Exception as exc:
+                # catch any errors that might get raised during querying
+                print(
+                    f"Error getting data for {concurrent_jobs[future]}: {exc}"
+                )
+                raise exc
+
+    return results
 
 def get_all_files_in_project(
     project_id: str,

@@ -13,81 +13,11 @@ from bin.util import (
     read_or_new_pickle,
     write_to_pickle,
     get_projects_as_dict,
+    call_in_parallel
 )
 
 logger = get_logger(__name__)
 
-
-def find_names_in_parallel_modify_filter(project, items, prefix='', suffix='', month_modified_before=None) -> list:
-    """
-    Call dxpy.find_data_objects in parallel for given list of `items`.
-
-    All items in list are chunked into max 100 items and queried in one
-    go as a regex pattern for more efficient querying
-
-    Stolen from dias_reports_bulk_reanalysis.
-
-    Parameters
-    ----------
-    project : str
-        project ID in which to restrict search scope
-    prefix : str
-        optional prefix string for searching
-    suffix : str
-        optional suffix string for searching
-    modified_before : str
-        optional modified_before search term. See dxpy_search for note on accepted formats
-
-    Returns
-    -------
-    list
-        list of all found dxpy object details
-    """
-    def _find(project, search_term):
-        """Query given patterns as a regex search term to find all files"""
-        return list(dx.find_data_objects(
-            project=project,
-            name=rf'{prefix}{"|".join(search_term)}{suffix}',
-            name_mode='regexp',
-            modified_before=month_modified_before,
-            describe={
-                'fields': {
-                    'modified': True,
-                    'folder': True,
-                    'name': True,
-                    # 'archivalState': True,
-                    # 'createdBy': True
-            }
-        }
-    ))
-
-    results = []
-
-    # make the plain-number month value compatible with 'modified_before'
-    # argument in find_data_objects
-    month_modified_before = f"-{month_modified_before}m"
-
-    # create chunks of 100 items from list for querying
-    chunked_items = [items[i:i + 100] for i in range(0, len(items), 100)]
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
-        concurrent_jobs = {
-            executor.submit(_find, project, item) for item in chunked_items
-        }
-
-        for future in concurrent.futures.as_completed(concurrent_jobs):
-            # access returned output as each is returned in any order
-            try:
-                results.extend(future.result())
-
-            except Exception as exc:
-                # catch any errors that might get raised during querying
-                print(
-                    f"Error getting data for {future}: {exc}"
-                )
-                raise exc
-
-    return results
 
 class FindClass:
     def __init__(
@@ -680,13 +610,24 @@ class FindClass:
         """
         logger.info("Getting all .tar files in staging-52..")
 
-        # list of tar files not modified in the last 3 months
-        tars = find_names_in_parallel_modify_filter(
-            self.env.PROJECT_52,
-            name="^run.*.tar.gz",
-            month_modified_before=self.env.TAR_MONTH
-            )
+        # make the plain-number month value compatible with 'modified_before'
+        # argument in find_data_objects
+        month_modified_before = f"-{self.env.TAR_MONTH}m"
 
+        # list of tar files not modified in the last 3 months
+        tars = dx.find_data_objects(
+                name="^run.*.tar.gz",
+                name_mode="regexp",
+                modified_before=month_modified_before,
+                describe={
+                    "fields": {
+                        "modified": True,
+                        "folder": True,
+                        "name": True,
+                    },
+                },
+                project=self.env.PROJECT_52,
+            )
         if not tars:
             # no .tar older than tar_month
             return []
