@@ -18,7 +18,7 @@ from bin.util import (
 logger = get_logger(__name__)
 
 
-def find_names_in_parallel(project, items, prefix='', suffix='', month_modified_before=None) -> list:
+def find_names_in_parallel_modify_filter(project, items, prefix='', suffix='', month_modified_before=None) -> list:
     """
     Call dxpy.find_data_objects in parallel for given list of `items`.
 
@@ -31,8 +31,6 @@ def find_names_in_parallel(project, items, prefix='', suffix='', month_modified_
     ----------
     project : str
         project ID in which to restrict search scope
-    items : list
-        list of search terms to search for
     prefix : str
         optional prefix string for searching
     suffix : str
@@ -90,7 +88,6 @@ def find_names_in_parallel(project, items, prefix='', suffix='', month_modified_
                 raise exc
 
     return results
-
 
 class FindClass:
     def __init__(
@@ -405,7 +402,7 @@ class FindClass:
                 self.archiving_projects_3_slack.append(dnanexus_link)
 
 
-    def find_folder_paths_parallel(self, project, paths) -> list:
+    def find_files_by_folder_paths_parallel(self, project, paths) -> list:
         """
         Call dxpy.find_data_objects in parallel.
         Adapted from dias_reports_bulk_reanalysis.
@@ -424,7 +421,7 @@ class FindClass:
         """
         def _find(project, path):
             """
-            Query given patterns as a regex search term to find all files
+            Just get everything with the 'file' classname
             """
             return list(dx.find_data_objects(
                     classname="file",
@@ -434,6 +431,7 @@ class FindClass:
                         "fields": {
                             "archivalState": True,
                             "tags": True,
+                            "modified": True
                         }
                     },
                 ))
@@ -509,7 +507,7 @@ class FindClass:
 
         # retrieve files in every folder
         # then group the files per-folder
-        project_files = self.find_folder_paths_parallel(
+        project_files = self.find_files_by_folder_paths_parallel(
             self.env.PROJECT_52,
             trimmed_to_original_folder_path.values()
             )
@@ -546,6 +544,46 @@ class FindClass:
         """
         return dt.datetime.fromtimestamp(epoch / 1000.0)
 
+    def find_precision_files_by_folder_paths_parallel(self, project, folders):
+        """
+        Finding precision files with parallelised search
+        Only get ACTIVE files.
+        """
+        def _find(project, path):
+            """
+            Run individual search job
+            """
+            return list(dx.find_data_objects(
+                    classname="file",
+                    project=project,
+                    folder=path,
+                    archival_state="live",
+                    describe={
+                        "fields": {
+                            "created": True,
+                            "archivalState": True,
+                        }
+                    },
+                ))
+
+        results = []
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
+            concurrent_jobs = {
+                executor.submit(_find, project, path) for path in folders
+            }
+
+            for future in concurrent.futures.as_completed(concurrent_jobs):
+                try:
+                    results.extend(future.result())
+                except Exception as exc:
+                    print(
+                        f"Error getting data for {future}: {exc}"
+                    )
+                    raise exc
+        return results
+
+
     def find_precisions(
         self,
     ) -> None:
@@ -555,6 +593,7 @@ class FindClass:
         """
         logger.info("Finding precision projects..")
 
+        project_to_prefix = dict()
         for project_id in self.env.PRECISION_ARCHIVING:
             try:
                 project = dx.DXProject(project_id)
@@ -567,38 +606,38 @@ class FindClass:
                 continue  # skip
 
             PRECISION_PREFIX = f"{self.env.DNANEXUS_URL_PREFIX}/{project_id.lstrip('project-')}/data"
+            project_to_prefix[project_id] = PRECISION_PREFIX
 
+        for project_id in self.env.PRECISION_ARCHIVING:
             # get all folders within the project
             folders = project.list_folder(
                 only="folders",
                 describe={"fields": {"archivalState": True}},
             ).get("folders", [])
 
-            # for each folder
+            # parallel-fetch the files for the project
+            # only get 'live' status files
+            project_files = self.find_precision_files_by_folder_paths_parallel(
+                self.env.PROJECT_52,
+                folders
+                )
+            project_files = {
+                k: list(v) for k, v in groupby(project_files, lambda x: x["folder"])
+            }
+
+            # for each folder, check whether the contents were modified recently
+            # enough to archive
             for folder_path in folders:
-                #  get all files
-                files = get_all_files_in_project(project_id, folder_path)
+                files = project_files.get(folder_path)
 
                 if not files:  # if no file in folder
                     logger.info(
-                        f"No file in {project_id}:{folder_path}. Skip."
-                    )
-                    continue
-
-                active_files = [
-                    file
-                    for file in files
-                    if file["describe"]["archivalState"] == "live"
-                ]  # only process those that are not archived
-
-                if not active_files:  # no active file, everything archived
-                    logger.info(
-                        f"All files in {project_id}:{folder_path} are archived. Skip."
+                        f"No live files found in {project_id}:{folder_path}. Skip."
                     )
                     continue
 
                 latest_modified_date = max(
-                    [file["describe"]["modified"] for file in active_files]
+                    [file["describe"]["modified"] for file in files]
                 )  # get latest modified date
 
                 # see if latest modified date is more than precision_month
@@ -613,7 +652,7 @@ class FindClass:
                         f"{project_id}|{folder_path}"
                     )
                     self.archiving_precision_directories_slack.append(
-                        f"<{PRECISION_PREFIX}{folder_path}|{folder_path}>"
+                        f"<{project_to_prefix[project_id]}{folder_path}|{folder_path}>"
                     )
 
     def save_to_pickle(self):
@@ -642,7 +681,7 @@ class FindClass:
         logger.info("Getting all .tar files in staging-52..")
 
         # list of tar files not modified in the last 3 months
-        tars = find_names_in_parallel(
+        tars = find_names_in_parallel_modify_filter(
             self.env.PROJECT_52,
             name="^run.*.tar.gz",
             month_modified_before=self.env.TAR_MONTH
