@@ -404,6 +404,58 @@ class FindClass:
 
                 self.archiving_projects_3_slack.append(dnanexus_link)
 
+
+    def find_folder_paths_parallel(self, project, paths) -> list:
+        """
+        Call dxpy.find_data_objects in parallel.
+        Adapted from dias_reports_bulk_reanalysis.
+
+        Parameters
+        ----------
+        project : str
+            project in which to search
+        paths : list
+            paths in which to restrict search scope
+        
+        Returns
+        -------
+        list
+            list of all found dxpy object details
+        """
+        def _find(project, path):
+            """
+            Query given patterns as a regex search term to find all files
+            """
+            return list(dx.find_data_objects(
+                    classname="file",
+                    project=project,
+                    folder=path,
+                    describe={
+                        "fields": {
+                            "archivalState": True,
+                            "tags": True,
+                        }
+                    },
+                ))
+
+        results = []
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
+            concurrent_jobs = {
+                executor.submit(_find, project, path) for path in paths
+            }
+
+            for future in concurrent.futures.as_completed(concurrent_jobs):
+                try:
+                    results.extend(future.result())
+                except Exception as exc:
+                    print(
+                        f"Error getting data for {future}: {exc}"
+                    )
+                    raise exc
+        return results
+
+
     def find_directories(
         self,
     ) -> None:
@@ -444,6 +496,9 @@ class FindClass:
             if self._validate_directory(trimmed)
         }
 
+        # trimmed_to_original_folder_path looks like:
+        # e.g {"my_folder": "/my_folder", "a_folder": "/processed/folder"}
+
         logger.info(
             f"Number of 'old enough' directories: {len(trimmed_to_original_folder_path)}",
         )
@@ -452,51 +507,37 @@ class FindClass:
         project52 = self.env.PROJECT_52.lstrip("project-")
         STAGING_PREFIX = f"{self.env.DNANEXUS_URL_PREFIX}/{project52}/data"
 
-        for index, (_, folder_path) in enumerate(
-            trimmed_to_original_folder_path.items()
-        ):
-            # progress tracker
-            if (index + 1) % 25 == 0:
-                logger.info(
-                    f"Processing {index + 1}/{len(trimmed_to_original_folder_path)}"
-                )
-
-            # TODO: parallelise
-            project_files = list(
-                dx.find_data_objects(
-                    classname="file",
-                    project=self.env.PROJECT_52,
-                    folder=folder_path,
-                    describe={
-                        "fields": {
-                            "archivalState": True,
-                            "tags": True,
-                        }
-                    },
-                )
+        # retrieve files in every folder
+        # then group the files per-folder
+        project_files = self.find_folder_paths_parallel(
+            self.env.PROJECT_52,
+            trimmed_to_original_folder_path.values()
             )
-
-            # get all files' archivalStatus
+        project_files = {
+            k: list(v) for k, v in groupby(project_files, lambda x: x["folder"])
+        }
+        # look at the files in each path for the project
+        for folder in trimmed_to_original_folder_path.values():
+            # in this folder, get all files' archivalStatus
+            folder_files = project_files.get(folder)
             statuses = set(
-                [x["describe"]["archivalState"] for x in project_files]
+                [x["describe"]["archivalState"] for x in folder_files]
             )
             tags = set(
                 itertools.chain.from_iterable(
-                    [x["describe"]["tags"] for x in project_files]
+                    [x["describe"]["tags"] for x in folder_files]
                 )
             )
 
-            if (
-                "live" in statuses
-            ):  # if there're files in directory with 'live' status
+            if ("live" in statuses):
+                # if there're files in directory with 'live' status
                 # if there's 'never-archive' tag in any file, continue
                 if "never-archive" in tags:
                     logger.info('Directory has "never-archive" tag. Skip.')
-                    continue
 
-                self.archiving_directories.append(folder_path)
+                self.archiving_directories.append(folder)
                 self.archiving_directories_slack.append(
-                    f"<{STAGING_PREFIX}{folder_path}|{folder_path}>"
+                    f"<{STAGING_PREFIX}{folder}|{folder}>"
                 )
 
     def _turn_epoch_to_datetime(self, epoch: int) -> dt.datetime:
