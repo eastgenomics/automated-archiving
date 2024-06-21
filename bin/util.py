@@ -73,7 +73,7 @@ def older_than(
     return date + relativedelta(months=+month) < dt.datetime.today()
 
 
-def call_in_parallel(func, fixed_vars, items) -> list:
+def call_in_parallel(func, items, **find_data_args) -> list:
     """
     Calls the given function in parallel using concurrent.futures on
     the given set of items (i.e for calling dxpy.describe() on multiple
@@ -84,11 +84,10 @@ def call_in_parallel(func, fixed_vars, items) -> list:
     ----------
     func : callable
         function to call on each item
-    fixed_vars : dictionary
-        a dictionary representing variables that get passed to func
-        every time, without iterating
     items : list
         list of items to call function on
+    find_data_args: dict
+        kwargs - these need to be passed to the iterated-over function
 
     Returns
     -------
@@ -98,7 +97,10 @@ def call_in_parallel(func, fixed_vars, items) -> list:
     results = []
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
-        concurrent_jobs = {executor.submit(func, fixed_vars, item): item for item in items}
+        if find_data_args:
+            concurrent_jobs = {executor.submit(func, item, find_data_args): item for item in items}
+        else:
+            concurrent_jobs = {executor.submit(func, item): item for item in items}
 
         for future in concurrent.futures.as_completed(concurrent_jobs):
             # access returned output as each is returned in any order

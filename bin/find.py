@@ -2,7 +2,6 @@ import itertools
 import collections
 import dxpy as dx
 import datetime as dt
-import concurrent
 from itertools import groupby
 
 from bin.environment import EnvironmentVariableClass
@@ -214,25 +213,8 @@ class FindClass:
                     )
                     )
 
-        results = []
+        return call_in_parallel(func=_find, items=projects, find_data_args=None)
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
-            concurrent_jobs = {
-                executor.submit(_find, project) for project in projects
-            }
-
-            for future in concurrent.futures.as_completed(concurrent_jobs):
-                # access returned output as each is returned in any order
-                try:
-                    results.extend(future.result())
-
-                except Exception as exc:
-                    # catch any errors that might get raised during querying
-                    print(
-                        f"Error getting data for {future}: {exc}"
-                    )
-                    raise exc
-        return results
 
     def find_projects(
         self,
@@ -349,13 +331,13 @@ class FindClass:
         list
             list of all found dxpy object details
         """
-        def _find(project, path):
+        def _find(path, **find_data_args):
             """
             Just get everything with the 'file' classname
             """
             return list(dx.find_data_objects(
                     classname="file",
-                    project=project,
+                    project=find_data_args["project"],
                     folder=path,
                     describe={
                         "fields": {
@@ -366,23 +348,7 @@ class FindClass:
                     },
                 ))
 
-        results = []
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
-            concurrent_jobs = {
-                executor.submit(_find, project, path) for path in paths
-            }
-
-            for future in concurrent.futures.as_completed(concurrent_jobs):
-                try:
-                    results.extend(future.result())
-                except Exception as exc:
-                    print(
-                        f"Error getting data for {future}: {exc}"
-                    )
-                    raise exc
-        return results
-
+        return call_in_parallel(_find, paths, project=project)
 
     def find_directories(
         self,
@@ -474,18 +440,18 @@ class FindClass:
         """
         return dt.datetime.fromtimestamp(epoch / 1000.0)
 
-    def find_precision_files_by_folder_paths_parallel(self, project, folders):
+    def find_precision_files_by_folder_paths_parallel(self, paths, project):
         """
         Finding precision files with parallelised search
         Only get ACTIVE files.
         """
-        def _find(project, path):
+        def _find(path, **find_data_args):
             """
             Run individual search job
             """
             return list(dx.find_data_objects(
                     classname="file",
-                    project=project,
+                    project=find_data_args["project"],
                     folder=path,
                     archival_state="live",
                     describe={
@@ -496,22 +462,7 @@ class FindClass:
                     },
                 ))
 
-        results = []
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
-            concurrent_jobs = {
-                executor.submit(_find, project, path) for path in folders
-            }
-
-            for future in concurrent.futures.as_completed(concurrent_jobs):
-                try:
-                    results.extend(future.result())
-                except Exception as exc:
-                    print(
-                        f"Error getting data for {future}: {exc}"
-                    )
-                    raise exc
-        return results
+        return call_in_parallel(_find, paths, project=project)
 
 
     def find_precisions(
