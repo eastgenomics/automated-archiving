@@ -98,9 +98,14 @@ def call_in_parallel(func, items, **find_data_args) -> list:
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
         if find_data_args:
-            concurrent_jobs = {executor.submit(func, item, find_data_args): item for item in items}
+            concurrent_jobs = {
+                executor.submit(func, item, find_data_args): item
+                for item in items
+            }
         else:
-            concurrent_jobs = {executor.submit(func, item): item for item in items}
+            concurrent_jobs = {
+                executor.submit(func, item): item for item in items
+            }
 
         for future in concurrent.futures.as_completed(concurrent_jobs):
             # access returned output as each is returned in any order
@@ -117,28 +122,31 @@ def call_in_parallel(func, items, **find_data_args) -> list:
 
 
 def find_precision_files_by_folder_paths_parallel(paths, project):
-        """
-        Finding precision files with parallelised search
-        Only get ACTIVE files.
-        """
-        def _find(path, **find_data_args):
-            """
-            Run individual search job
-            """
-            return list(dx.find_data_objects(
-                    classname="file",
-                    project=find_data_args["project"],
-                    folder=path,
-                    archival_state="live",
-                    describe={
-                        "fields": {
-                            "created": True,
-                            "archivalState": True,
-                        }
-                    },
-                ))
+    """
+    Finding precision files with parallelised search
+    Only get ACTIVE files.
+    """
 
-        return call_in_parallel(_find, paths, project=project)
+    def _find(path, **find_data_args):
+        """
+        Run individual search job
+        """
+        return list(
+            dx.find_data_objects(
+                classname="file",
+                project=find_data_args["project"],
+                folder=path,
+                archival_state="live",
+                describe={
+                    "fields": {
+                        "created": True,
+                        "archivalState": True,
+                    }
+                },
+            )
+        )
+
+    return call_in_parallel(_find, paths, project=project)
 
 
 def read_or_new_pickle(path: str) -> dict:

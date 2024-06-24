@@ -5,7 +5,7 @@ from typing import Optional, List
 from bin.util import (
     older_than,
     get_all_files_in_project,
-    find_precision_files_by_folder_paths_parallel
+    find_precision_files_by_folder_paths_parallel,
 )
 from bin.helper import get_logger
 from bin.environment import EnvironmentVariableClass
@@ -118,7 +118,7 @@ class ArchiveClass:
 
         logger.info(f"{len(list_of_projects)} projects found for archiving.")
 
-        #TODO: parallelise _get_project_describe across several projects
+        # TODO: parallelise _get_project_describe across several projects
 
         for index, project_id in enumerate(list_of_projects):
             if index > 0 and index % 20 == 0:
@@ -333,7 +333,9 @@ class ArchiveClass:
         for project_id, folder_path in project_id_to_folder.items():
             # check again the same criteria if latest modified date is older than precision_month
             # because it might have been modified recently
-            active_files = find_precision_files_by_folder_paths_parallel(folder_path, project_id)
+            active_files = find_precision_files_by_folder_paths_parallel(
+                folder_path, project_id
+            )
 
             if not active_files:  # no active file, everything archived
                 continue

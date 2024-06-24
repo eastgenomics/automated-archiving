@@ -13,7 +13,7 @@ from bin.util import (
     read_or_new_pickle,
     write_to_pickle,
     get_projects_as_dict,
-    call_in_parallel
+    call_in_parallel,
 )
 
 logger = get_logger(__name__)
@@ -42,7 +42,6 @@ class FindClass:
         self.archive_pickle = read_or_new_pickle(
             env.AUTOMATED_ARCHIVE_PICKLE_PATH
         )
-
 
     def _get_old_enough_projects(
         self,
@@ -185,7 +184,6 @@ class FindClass:
 
         return False
 
-
     def get_archival_status_parallel(self, projects) -> list:
         """
         Call dxpy.find_data_objects in parallel.
@@ -196,26 +194,27 @@ class FindClass:
         ----------
         projects : list
             project IDs in which to restrict search scope
-        
+
         Returns
         -------
         list
             list of all found dxpy object details
         """
+
         def _find(project):
             """
             Query given patterns as a regex search term to find all files
             """
-            return list(dx.find_data_objects(
-                project=project,
-                describe={
-                    'fields': {'archivalState': True}
-                    }
-                    )
-                    )
+            return list(
+                dx.find_data_objects(
+                    project=project,
+                    describe={"fields": {"archivalState": True}},
+                )
+            )
 
-        return call_in_parallel(func=_find, items=projects, find_data_args=None)
-
+        return call_in_parallel(
+            func=_find, items=projects, find_data_args=None
+        )
 
     def find_projects(
         self,
@@ -233,13 +232,16 @@ class FindClass:
         logger.info(
             f"Number of 'old enough' projects found: {len(qualified_projects)}!"
         )
-        
+
         user_to_project_id_and_dnanexus = collections.defaultdict(list)
 
         # get archival statuses for each project
-        archival_statuses = self.get_archival_status_parallel(qualified_projects)
+        archival_statuses = self.get_archival_status_parallel(
+            qualified_projects
+        )
         archival_statuses = {
-            k: list(v) for k, v in groupby(archival_statuses, lambda x: x["project"])
+            k: list(v)
+            for k, v in groupby(archival_statuses, lambda x: x["project"])
         }
 
         for index, (project_id, v) in enumerate(qualified_projects.items()):
@@ -314,7 +316,6 @@ class FindClass:
 
                 self.archiving_projects_3_slack.append(dnanexus_link)
 
-
     def find_files_by_folder_paths_parallel(self, project, paths) -> list:
         """
         Call dxpy.find_data_objects in parallel.
@@ -326,17 +327,19 @@ class FindClass:
             project in which to search
         paths : list
             paths in which to restrict search scope
-        
+
         Returns
         -------
         list
             list of all found dxpy object details
         """
+
         def _find(path, **find_data_args):
             """
             Just get everything with the 'file' classname
             """
-            return list(dx.find_data_objects(
+            return list(
+                dx.find_data_objects(
                     classname="file",
                     project=find_data_args["project"],
                     folder=path,
@@ -344,10 +347,11 @@ class FindClass:
                         "fields": {
                             "archivalState": True,
                             "tags": True,
-                            "modified": True
+                            "modified": True,
                         }
                     },
-                ))
+                )
+            )
 
         return call_in_parallel(_find, paths, project=project)
 
@@ -375,9 +379,9 @@ class FindClass:
         for folder in self._get_folders_in_project(
             self.env.PROJECT_52, directory_path="/processed"
         ):
-            trimmed_to_original_folder_path[folder.lstrip("/processed/")] = (
-                folder
-            )
+            trimmed_to_original_folder_path[
+                folder.lstrip("/processed/")
+            ] = folder
 
         logger.info(
             f"Found {len(trimmed_to_original_folder_path)} directories in staging-52"
@@ -405,11 +409,11 @@ class FindClass:
         # retrieve files in every folder
         # then group the files per-folder
         project_files = self.find_files_by_folder_paths_parallel(
-            self.env.PROJECT_52,
-            trimmed_to_original_folder_path.values()
-            )
+            self.env.PROJECT_52, trimmed_to_original_folder_path.values()
+        )
         project_files = {
-            k: list(v) for k, v in groupby(project_files, lambda x: x["folder"])
+            k: list(v)
+            for k, v in groupby(project_files, lambda x: x["folder"])
         }
         # look at the files in each path for the project
         for folder in trimmed_to_original_folder_path.values():
@@ -424,7 +428,7 @@ class FindClass:
                 )
             )
 
-            if ("live" in statuses):
+            if "live" in statuses:
                 # if there're files in directory with 'live' status
                 # if there's 'never-archive' tag in any file, continue
                 if "never-archive" in tags:
@@ -440,7 +444,6 @@ class FindClass:
         Function to turn epoch to datetime
         """
         return dt.datetime.fromtimestamp(epoch / 1000.0)
-
 
     def find_precisions(
         self,
@@ -478,9 +481,10 @@ class FindClass:
             project_files = find_precision_files_by_folder_paths_parallel(
                 folders,
                 self.env.PROJECT_52,
-                )
+            )
             project_files = {
-                k: list(v) for k, v in groupby(project_files, lambda x: x["folder"])
+                k: list(v)
+                for k, v in groupby(project_files, lambda x: x["folder"])
             }
 
             # for each folder, check whether the contents were modified recently
@@ -520,9 +524,9 @@ class FindClass:
 
         self.archive_pickle["projects"] = self.archiving_projects
         self.archive_pickle["directories"] = self.archiving_directories
-        self.archive_pickle["precisions"] = (
-            self.archiving_precision_directories
-        )
+        self.archive_pickle[
+            "precisions"
+        ] = self.archiving_precision_directories
 
         write_to_pickle(
             self.env.AUTOMATED_ARCHIVE_PICKLE_PATH, self.archive_pickle
@@ -544,18 +548,18 @@ class FindClass:
 
         # list of tar files not modified in the last 3 months
         tars = dx.find_data_objects(
-                name="^run.*.tar.gz",
-                name_mode="regexp",
-                modified_before=month_modified_before,
-                describe={
-                    "fields": {
-                        "modified": True,
-                        "folder": True,
-                        "name": True,
-                    },
+            name="^run.*.tar.gz",
+            name_mode="regexp",
+            modified_before=month_modified_before,
+            describe={
+                "fields": {
+                    "modified": True,
+                    "folder": True,
+                    "name": True,
                 },
-                project=self.env.PROJECT_52,
-            )
+            },
+            project=self.env.PROJECT_52,
+        )
         if not tars:
             # no .tar older than tar_month
             return []
