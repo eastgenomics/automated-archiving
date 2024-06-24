@@ -1,10 +1,12 @@
 import dxpy as dx
 import collections
 from typing import Optional, List
+from itertools import groupby
 
 from bin.util import (
     older_than,
     find_precision_files_by_folder_paths_parallel,
+    call_in_parallel
 )
 from bin.helper import get_logger
 from bin.environment import EnvironmentVariableClass
@@ -20,27 +22,33 @@ class ArchiveClass:
     def __init__(self, env: EnvironmentVariableClass):
         self.env = env
 
-    def _get_project_describe(self, project_id: str) -> Optional[dict]:
+    def _get_projects_describe(self, project_ids: list, **find_data_args) -> Optional[dict]:
         """
-        Fetch describe of a project
+        Fetch describe of a list of projects.
         Return None if failed.
 
         Parameters:
-        :param: project_id: project-id
+        :param: project_ids: a list of project-ids
         """
-        try:
-            return dx.DXProject(project_id).describe()
-        except dx.exceptions.ResourceNotFound as e:
-            # if project-id no longer exist on DNAnexus
-            # probably project got deleted or etc.
-            # causing this part to fail
-            logger.info(f"{project_id} seems to be missing. {e}")
-            return None
-        except Exception as e:
-            # no idea what kind of exception DNAnexus will give
-            # log and move on to the next project
-            logger.error(e)
-            return None
+        def _get(project_id, **find_data_args):
+            try:
+                return dx.DXProject(project_id).describe()
+            except dx.exceptions.ResourceNotFound as e:
+                # if project-id no longer exist on DNAnexus
+                # probably project got deleted or etc.
+                # causing this part to fail
+                logger.info(f"{project_id} seems to be missing. {e}")
+                return None
+            except Exception as e:
+                # no idea what kind of exception DNAnexus will give
+                # log and move on to the next project
+                logger.error(e)
+                return None
+
+        return call_in_parallel(
+            func=_get, items=project_ids, find_data_args=None
+        )
+
 
     def _find_file_ids_that_match_regex(
         self,
@@ -117,17 +125,16 @@ class ArchiveClass:
 
         logger.info(f"{len(list_of_projects)} projects found for archiving.")
 
-        # TODO: parallelise _get_project_describe across several projects
+        # get descriptions for the projects
+        project_details = self._get_projects_describe(list_of_projects)
+        project_details = {
+                k: list(v) for k, v in groupby(project_details, lambda x: x["project"])
+            }
 
-        for index, project_id in enumerate(list_of_projects):
-            if index > 0 and index % 20 == 0:
-                logger.info(
-                    f"Archiving {index}/{len(list_of_projects)} projects",
-                )
+        for project_id in list_of_projects:
+            project_detail = project_details.get(project_id)
 
-            project_detail = self._get_project_describe(project_id)
-
-            if project_detail is None:
+            if not project_detail:
                 continue
 
             project_name: str = project_detail.get("name")
