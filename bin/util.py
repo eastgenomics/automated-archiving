@@ -142,6 +142,31 @@ def get_all_files_in_project(
     )
 
 
+def find_precision_files_by_folder_paths_parallel(paths, project):
+        """
+        Finding precision files with parallelised search
+        Only get ACTIVE files.
+        """
+        def _find(path, **find_data_args):
+            """
+            Run individual search job
+            """
+            return list(dx.find_data_objects(
+                    classname="file",
+                    project=find_data_args["project"],
+                    folder=path,
+                    archival_state="live",
+                    describe={
+                        "fields": {
+                            "created": True,
+                            "archivalState": True,
+                        }
+                    },
+                ))
+
+        return call_in_parallel(_find, paths, project=project)
+
+
 def read_or_new_pickle(path: str) -> dict:
     """
     Read stored pickle memory for the script
