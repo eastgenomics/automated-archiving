@@ -7,7 +7,6 @@ from itertools import groupby
 from bin.environment import EnvironmentVariableClass
 from bin.helper import get_logger
 from bin.util import (
-    get_all_files_in_project,
     find_precision_files_by_folder_paths_parallel,
     older_than,
     read_or_new_pickle,

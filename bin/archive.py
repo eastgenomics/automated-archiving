@@ -4,7 +4,6 @@ from typing import Optional, List
 
 from bin.util import (
     older_than,
-    get_all_files_in_project,
     find_precision_files_by_folder_paths_parallel,
 )
 from bin.helper import get_logger
