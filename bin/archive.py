@@ -2,7 +2,11 @@ import dxpy as dx
 import collections
 from typing import Optional, List
 
-from bin.util import older_than, get_all_files_in_project
+from bin.util import (
+    older_than,
+    get_all_files_in_project,
+    find_precision_files_by_folder_paths_parallel
+)
 from bin.helper import get_logger
 from bin.environment import EnvironmentVariableClass
 
@@ -113,6 +117,8 @@ class ArchiveClass:
         archived_projects = set()
 
         logger.info(f"{len(list_of_projects)} projects found for archiving.")
+
+        #TODO: parallelise _get_project_describe across several projects
 
         for index, project_id in enumerate(list_of_projects):
             if index > 0 and index % 20 == 0:
@@ -313,20 +319,21 @@ class ArchiveClass:
         archived_precisions = collections.defaultdict(list)
         logger.info("Archiving precisions..")
 
+        # reformat the pickle into a dict of project IDs linked to their paths
+        project_id_to_folder = dict()
         for project_id_and_folder in project_id_and_folders:
             project_id, folder_path = (
                 p.strip() for p in project_id_and_folder.split("|")
             )
+            if not project_id_to_folder.get(project_id):
+                project_id_to_folder[project_id] = [folder_path]
+            else:
+                project_id_and_folder[project_id].append(project_id)
 
+        for project_id, folder_path in project_id_to_folder.items():
             # check again the same criteria if latest modified date is older than precision_month
             # because it might have been modified recently
-            files = get_all_files_in_project(project_id, folder_path)
-
-            active_files = [
-                file
-                for file in files
-                if file["describe"]["archivalState"] != "archived"
-            ]  # only process those that are not archived
+            active_files = find_precision_files_by_folder_paths_parallel(folder_path, project_id)
 
             if not active_files:  # no active file, everything archived
                 continue
@@ -344,12 +351,7 @@ class ArchiveClass:
                 # archive the folder in the project-id
                 if not self.env.ARCHIVE_DEBUG:
                     # archive the folder
-                    for file in dx.find_data_objects(
-                        project=project_id,
-                        classname="file",
-                        archival_state="live",
-                        folder=folder_path,
-                    ):
+                    for file in active_files:
                         self._archive_file(file["id"], project_id)
 
                     archived_precisions[project_id].append(folder_path)

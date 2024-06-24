@@ -8,6 +8,7 @@ from bin.environment import EnvironmentVariableClass
 from bin.helper import get_logger
 from bin.util import (
     get_all_files_in_project,
+    find_precision_files_by_folder_paths_parallel,
     older_than,
     read_or_new_pickle,
     write_to_pickle,
@@ -440,30 +441,6 @@ class FindClass:
         """
         return dt.datetime.fromtimestamp(epoch / 1000.0)
 
-    def find_precision_files_by_folder_paths_parallel(self, paths, project):
-        """
-        Finding precision files with parallelised search
-        Only get ACTIVE files.
-        """
-        def _find(path, **find_data_args):
-            """
-            Run individual search job
-            """
-            return list(dx.find_data_objects(
-                    classname="file",
-                    project=find_data_args["project"],
-                    folder=path,
-                    archival_state="live",
-                    describe={
-                        "fields": {
-                            "created": True,
-                            "archivalState": True,
-                        }
-                    },
-                ))
-
-        return call_in_parallel(_find, paths, project=project)
-
 
     def find_precisions(
         self,
@@ -498,9 +475,9 @@ class FindClass:
 
             # parallel-fetch the files for the project
             # only get 'live' status files
-            project_files = self.find_precision_files_by_folder_paths_parallel(
+            project_files = find_precision_files_by_folder_paths_parallel(
+                folders,
                 self.env.PROJECT_52,
-                folders
                 )
             project_files = {
                 k: list(v) for k, v in groupby(project_files, lambda x: x["folder"])
