@@ -115,32 +115,6 @@ def call_in_parallel(func, items, **find_data_args) -> list:
 
     return results
 
-def get_all_files_in_project(
-    project_id: str,
-    folder_path: str = "/",
-) -> list:
-    """
-    Function fetch all files within a folder in a project
-
-    Args:
-        project_id (str): project-id
-        folder (str): folder path
-
-    Returns:
-        list: list of files with describe (modified and archivalState)
-    """
-    return list(
-        dx.find_data_objects(
-            classname="file",
-            folder=folder_path,
-            project=project_id,
-            describe={
-                "created": True,  # changed to created instead of modified
-                "archivalState": True,
-            },
-        )
-    )
-
 
 def find_precision_files_by_folder_paths_parallel(paths, project):
         """
