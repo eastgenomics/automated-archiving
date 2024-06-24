@@ -60,16 +60,31 @@ def main():
     slack.notify({"tars": tars})
 
     if datetime.day in [1, 15]:
-        archived_project_ids = archive.archive_projects(
-            projects_marked_for_archiving
+        checked_projects_to_archive = (
+            archive.list_files_to_archive_per_project(
+                projects_marked_for_archiving
+            )
         )
+        if not archive.env.ARCHIVE_DEBUG:  # if running in production
+            # run the archiving
+            for (
+                project_id,
+                files_to_archive,
+            ) in checked_projects_to_archive.items():
+                archive._parallel_archive_file(files_to_archive, project_id)
+        else:
+            logger.info(
+                f"Running in DEBUG mode. Skip archiving "
+                f"{checked_projects_to_archive.keys()}!"
+            )
+
         archived_directories_dict = archive.archive_staging52(
             staging52_directories
         )
         archived_precisions = archive.archive_precisions(precision_projects)
 
         slack.post_long_message_to_slack(
-            "#egg-alerts" "archived", list(archived_project_ids)
+            "#egg-alerts" "archived", list(checked_projects_to_archive.keys())
         )
         slack.post_long_message_to_slack(
             "#egg-alerts" "archived",

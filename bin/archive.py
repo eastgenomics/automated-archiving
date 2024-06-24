@@ -6,7 +6,7 @@ from itertools import groupby
 from bin.util import (
     older_than,
     find_precision_files_by_folder_paths_parallel,
-    call_in_parallel
+    call_in_parallel,
 )
 from bin.helper import get_logger
 from bin.environment import EnvironmentVariableClass
@@ -22,7 +22,9 @@ class ArchiveClass:
     def __init__(self, env: EnvironmentVariableClass):
         self.env = env
 
-    def _get_projects_describe(self, project_ids: list, **find_data_args) -> Optional[dict]:
+    def _get_projects_describe(
+        self, project_ids: list, **find_data_args
+    ) -> Optional[dict]:
         """
         Fetch describe of a list of projects.
         Return None if failed.
@@ -30,6 +32,7 @@ class ArchiveClass:
         Parameters:
         :param: project_ids: a list of project-ids
         """
+
         def _get(project_id, **find_data_args):
             try:
                 return dx.DXProject(project_id).describe()
@@ -48,7 +51,6 @@ class ArchiveClass:
         return call_in_parallel(
             func=_get, items=project_ids, find_data_args=None
         )
-
 
     def _find_file_ids_that_match_regex(
         self,
@@ -85,6 +87,19 @@ class ArchiveClass:
 
         return file_ids
 
+    def _parallel_archive_file(self, file_ids, project) -> None:
+        """
+        Archiving a list of file-id on DNAnexus in parallel
+        """
+
+        def _archive(file, **find_data_args):
+            dx.DXFile(
+                file,
+                project=find_data_args["project"],
+            ).archive()
+
+        return call_in_parallel(_archive, file_ids, project=project)
+
     def _archive_file(
         self,
         file_id: str,
@@ -113,11 +128,17 @@ class ArchiveClass:
         except Exception as e:  # non-DNAnexus related errors
             logger.error(e)
 
-    def archive_projects(self, list_of_projects: list) -> set:
+    def list_files_to_archive_per_project(self, list_of_projects: list) -> set:
         """
-        Function to archive list of project-ids
+        Checks that functions and their constituent files, previously listed
+         as ready-to-archive, are still in a valid state.
+        Adds the valid project ids and files to a dict-of-lists ready for
+        bulk archiving.
 
-        Returns: set of archived project-ids
+        Param: a list, list_of_projects, which gives project IDs for assessment
+
+        Returns: dict of ready-to-archive files in format
+        {project-ids: [file-1, file-2]}
         """
 
         # jot down what has been archived
@@ -125,11 +146,16 @@ class ArchiveClass:
 
         logger.info(f"{len(list_of_projects)} projects found for archiving.")
 
-        # get descriptions for the projects
+        # get up-to-date descriptions for the projects
+        # use them to check we still want to archive them, in which case, add
+        # their constituent qualifying files to project_files_cleared_for_archive
         project_details = self._get_projects_describe(list_of_projects)
         project_details = {
-                k: list(v) for k, v in groupby(project_details, lambda x: x["project"])
-            }
+            k: list(v)
+            for k, v in groupby(project_details, lambda x: x["project"])
+        }
+
+        project_files_cleared_for_archive = dict()
 
         for project_id in list_of_projects:
             project_detail = project_details.get(project_id)
@@ -143,7 +169,7 @@ class ArchiveClass:
 
             # check their tags
             if "never-archive" in tags:
-                # project has been tagged never-archive, skip
+                # project has been tagged never-archive - skip archiving it
                 logger.info(f"NEVER ARCHIVE: {project_name}. Skip archiving!")
                 continue
 
@@ -155,39 +181,32 @@ class ArchiveClass:
                 # 'archived_modified_month' month
                 # both result in the same archiving process
 
-                # find if there is file in this project
-                # that match the exclude regex
-                # if none, we can run dx.DXProject.archive
-                # else, we archive file-id by file-id
+                # exclude files that match the exclude regex
                 file_ids_to_exclude = self._find_file_ids_that_match_regex(
                     self.env.AUTOMATED_REGEX_EXCLUDE, project_id
                 )
 
-                if not self.env.ARCHIVE_DEBUG:  # if running in production
-                    archived = False
+                for file in dx.find_data_objects(
+                    project=project_id,
+                    classname="file",
+                    archival_state="live",
+                    folder="/",
+                ):
+                    if (
+                        file["id"] in file_ids_to_exclude
+                    ):  # skip file-id that match exclude regex
+                        continue
 
-                    for file in dx.find_data_objects(
-                        project=project_id,
-                        classname="file",
-                        archival_state="live",
-                        folder="/",
-                    ):
-                        if (
-                            file["id"] in file_ids_to_exclude
-                        ):  # skip file-id that match exclude regex
-                            continue
+                    # this file needs to be archived, add to dict
+                    if project_files_cleared_for_archive.get(project_id):
+                        project_files_cleared_for_archive[project_id].append(
+                            file["id"]
+                        )
+                    else:
+                        project_files_cleared_for_archive[project_id] = [
+                            file["id"]
+                        ]
 
-                        self._archive_file(file["id"], project_id)
-                        archived = True
-
-                    if archived:
-                        archived_projects.add(project_id)
-                        logger.info(f"{project_id} archived!")
-
-                else:
-                    logger.info(
-                        f"Running in DEBUG mode. Skip archiving {project_id}!"
-                    )
             else:
                 # project not older than ARCHIVE_MODIFIED_MONTH
                 # meaning project has been modified recently, so skip
@@ -196,7 +215,7 @@ class ArchiveClass:
                 )
                 continue
 
-        return archived_projects
+        return project_files_cleared_for_archive
 
     def _archive_directory_based_on_directory_path(
         self,
