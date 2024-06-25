@@ -7,7 +7,7 @@ from itertools import groupby
 from bin.environment import EnvironmentVariableClass
 from bin.helper import get_logger
 from bin.util import (
-    find_precision_files_by_folder_paths_parallel,
+    find_active_files_by_folder_paths_parallel,
     older_than,
     read_or_new_pickle,
     write_to_pickle,
@@ -226,6 +226,7 @@ class FindClass:
         logger.info("Finding projects..")
 
         # get all old enough projects
+        # the results will also contain archivalState
         qualified_projects = self._get_old_enough_projects()
 
         logger.info(
@@ -294,6 +295,13 @@ class FindClass:
         )
 
         # sort 003 project by user for slack notification
+        self.sort_slack_3_by_user(user_to_project_id_and_dnanexus)
+        
+
+    def sort_slack_3_by_user(self, user_to_project_id_and_dnanexus):
+        """
+        Sort 003 project by user for Slack notification
+        """
         current_user = None
         for user, values in user_to_project_id_and_dnanexus.items():
             if current_user is None:  # first user
@@ -314,6 +322,7 @@ class FindClass:
                 dnanexus_link = row["link"]
 
                 self.archiving_projects_3_slack.append(dnanexus_link)
+
 
     def find_files_by_folder_paths_parallel(self, project, paths) -> list:
         """
@@ -479,7 +488,7 @@ class FindClass:
 
             # parallel-fetch the files for the project
             # only get 'live' status files
-            project_files = find_precision_files_by_folder_paths_parallel(
+            project_files = find_active_files_by_folder_paths_parallel(
                 folders,
                 project_id,
             )
