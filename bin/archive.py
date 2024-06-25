@@ -2,10 +2,11 @@ import dxpy as dx
 import collections
 from typing import Optional, List
 from itertools import groupby
+import re
 
 from bin.util import (
     older_than,
-    find_precision_files_by_folder_paths_parallel,
+    find_active_files_by_folder_paths_parallel,
     call_in_parallel,
 )
 from bin.helper import get_logger
@@ -51,6 +52,29 @@ class ArchiveClass:
         return call_in_parallel(
             func=_get, items=project_ids, find_data_args=None
         )
+
+    def _find_file_ids_that_match_regex_no_api(
+        self,
+        regexes: list,
+        files: list,
+    ) -> set:
+        """
+        Function to find files with names that match the regexes
+        This acts on already-fetched-from-DNAnexus files so we
+        don't have to call the API again.
+
+        Parameters:
+        :param: regexes: list of regexes to match
+        :param: files: a list of dxpy file records
+
+        Returns: set of file-ids
+        """
+        file_ids = set()
+        for regex in regexes:
+            for file in files:
+                if re.fullmatch(regex, file["name"]):
+                    file_ids.add(file["name"])
+        return file_ids
 
     def _find_file_ids_that_match_regex(
         self,
@@ -219,6 +243,7 @@ class ArchiveClass:
 
     def _archive_directory_based_on_directory_path(
         self,
+        active_files: list,
         project_id: str,
         directory_path: str,
     ) -> int:
@@ -226,6 +251,7 @@ class ArchiveClass:
         Function to archive files in directories
 
         Arguments:
+        :param: active_files: active file results from a dxpy search for directory_path
         :param: project_id: project-id
         :param: directory_path: directory path in the project-id
 
@@ -234,6 +260,8 @@ class ArchiveClass:
         archived_count = 0
 
         # check for 'never-archive' tag in directory
+        # TODO: I can't just use the existing file in case there's 'never-archive' on archived material?
+        # Seems like it shouldn't be possible, but I'm not ruling out a weird fluke
         never_archive = list(
             dx.find_data_objects(
                 project=project_id,
@@ -247,45 +275,32 @@ class ArchiveClass:
             logger.info(f"NEVER ARCHIVE: {directory_path} in {project_id}")
             return archived_count
 
-        # 2 * 4 week = 8 weeks
-        num_weeks = self.env.ARCHIVE_MODIFIED_MONTH * 4
-
-        # check if there's any files modified in the last num_weeks
-        recent_modified = list(
-            dx.find_data_objects(
-                project=self.env.PROJECT_52,
-                folder=directory_path,
-                modified_after=f"-{num_weeks}w",
-                limit=1,
+        # check if there's any files modified in the last
+        # ARCHIVE_MODIFIED_MONTH
+        recent_modified_files = [
+            file
+            for file in active_files
+            if older_than(
+                self.env.ARCHIVE_MODIFIED_MONTH, file["describe"]["modified"]
             )
-        )
+        ]
 
-        if recent_modified:
+        if recent_modified_files:
             logger.info(f"RECENTLY MODIFIED: {directory_path} in {project_id}")
             return archived_count
 
-        # if directory in staging52 got
-        # no tag indicating dont archive
-        # it will end up here
-        excluded_file_ids = self._find_file_ids_that_match_regex(
-            self.env.AUTOMATED_REGEX_EXCLUDE,
-            self.env.PROJECT_52,
-            directory_path,
+        # for files that are old enough to archive and not tagged
+        # "never archive" - check they don't match an exclude regex
+        excluded_file_ids = self._find_file_ids_that_match_regex_no_api(
+            self.env.AUTOMATED_REGEX_EXCLUDE, active_files
         )
 
-        # get a collection of the files in this project/directory that 
+        # get a collection of the files in this project/directory that
         # should be archived
         active_file_ids = list()
 
-        for file in dx.find_data_objects(
-            project=project_id,
-            classname="file",
-            archival_state="live",
-            folder=directory_path,
-        ):
-            if (
-                file["id"] not in excluded_file_ids
-            ):  
+        for file in active_files:
+            if file["id"] not in excluded_file_ids:
                 # only archive file-id that DON'T match exclude regex
                 active_file_ids.append(file["id"])
 
@@ -318,13 +333,19 @@ class ArchiveClass:
         archived_dict = {}
         logger.info(f"{len(directory_list)} directories found for archiving.")
 
+        # get all files in the directory_list, with tags
+        # group by directory for convenience
+        active_files = find_active_files_by_folder_paths_parallel(
+            directory_list, self.env.PROJECT_52
+        )
+        active_files = {
+            k: list(v) for k, v in groupby(active_files, lambda x: x["folder"])
+        }
+
         # directories in to-be-archived list in stagingarea52
-        for index, directory in enumerate(directory_list):
-            if index > 0 and index % 20 == 0:
-                logger.info(
-                    f"Processing {index}/{len(directory_list)} directory",
-                )
+        for directory in directory_list:
             archived_num = self._archive_directory_based_on_directory_path(
+                active_files,
                 self.env.PROJECT_52,
                 directory,
             )
@@ -363,7 +384,7 @@ class ArchiveClass:
         for project_id, folder_path in project_id_to_folder.items():
             # check again the same criteria if latest modified date is older than precision_month
             # because it might have been modified recently
-            active_files = find_precision_files_by_folder_paths_parallel(
+            active_files = find_active_files_by_folder_paths_parallel(
                 folder_path, project_id
             )
 
@@ -384,7 +405,9 @@ class ArchiveClass:
                 if not self.env.ARCHIVE_DEBUG:
                     # archive the folder
                     active_file_ids = [x for x in active_files["id"]]
-                    self._parallel_archive_file(self, active_file_ids, project_id)
+                    self._parallel_archive_file(
+                        self, active_file_ids, project_id
+                    )
 
                     archived_precisions[project_id].append(folder_path)
                     logger.info(f"{project_id}:{folder_path} archived!")

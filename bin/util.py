@@ -121,9 +121,9 @@ def call_in_parallel(func, items, **find_data_args) -> list:
     return results
 
 
-def find_precision_files_by_folder_paths_parallel(paths, project):
+def find_active_files_by_folder_paths_parallel(paths, project):
     """
-    Finding precision files with parallelised search
+    Finding files with parallelised search, known project, list of paths.
     Only get ACTIVE files.
     """
 
@@ -141,6 +141,8 @@ def find_precision_files_by_folder_paths_parallel(paths, project):
                     "fields": {
                         "created": True,
                         "archivalState": True,
+                        "tags": True,
+                        "modified": True,
                     }
                 },
             )

@@ -466,8 +466,9 @@ class FindClass:
                 )
                 continue  # skip
 
-            project_to_prefix[project_id] = f"{self.env.DNANEXUS_URL_PREFIX}/{project_id.lstrip('project-')}/data"
-            
+            project_to_prefix[
+                project_id
+            ] = f"{self.env.DNANEXUS_URL_PREFIX}/{project_id.lstrip('project-')}/data"
 
         for project_id in self.env.PRECISION_ARCHIVING:
             # get all folders within the project
