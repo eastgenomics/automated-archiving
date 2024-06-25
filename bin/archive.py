@@ -7,6 +7,7 @@ import re
 from bin.util import (
     older_than,
     find_active_files_by_folder_paths_parallel,
+    find_never_archive_by_folder_paths_parallel,
     call_in_parallel,
 )
 from bin.helper import get_logger
@@ -24,7 +25,7 @@ class ArchiveClass:
         self.env = env
 
     def _get_projects_describe(
-        self, project_ids: list, **find_data_args
+        self, project_ids: list
     ) -> Optional[dict]:
         """
         Fetch describe of a list of projects.
@@ -34,7 +35,7 @@ class ArchiveClass:
         :param: project_ids: a list of project-ids
         """
 
-        def _get(project_id, **find_data_args):
+        def _get(project_id):
             try:
                 return dx.DXProject(project_id).describe()
             except dx.exceptions.ResourceNotFound as e:
@@ -164,10 +165,6 @@ class ArchiveClass:
         Returns: dict of ready-to-archive files in format
         {project-ids: [file-1, file-2]}
         """
-
-        # jot down what has been archived
-        archived_projects = set()
-
         logger.info(f"{len(list_of_projects)} projects found for archiving.")
 
         # get up-to-date descriptions for the projects
@@ -241,9 +238,10 @@ class ArchiveClass:
 
         return project_files_cleared_for_archive
 
-    def _archive_directory_based_on_directory_path(
+    def _archive_directory_based_on_path(
         self,
         active_files: list,
+        never_archive_files: list,
         project_id: str,
         directory_path: str,
     ) -> int:
@@ -251,7 +249,10 @@ class ArchiveClass:
         Function to archive files in directories
 
         Arguments:
-        :param: active_files: active file results from a dxpy search for directory_path
+        :param: active_files: active file results from a dxpy search for 
+        directory_path
+        :param: never_archive_files: never-archive tagged file results 
+        from a dxpy search for directory_path
         :param: project_id: project-id
         :param: directory_path: directory path in the project-id
 
@@ -260,18 +261,9 @@ class ArchiveClass:
         archived_count = 0
 
         # check for 'never-archive' tag in directory
-        # TODO: I can't just use the existing file in case there's 'never-archive' on archived material?
+        # can't just use the existing file in case there's 'never-archive' on archived material
         # Seems like it shouldn't be possible, but I'm not ruling out a weird fluke
-        never_archive = list(
-            dx.find_data_objects(
-                project=project_id,
-                folder=directory_path,
-                tags=["never-archive"],
-                limit=1,
-            )
-        )
-
-        if never_archive:
+        if never_archive_files:
             logger.info(f"NEVER ARCHIVE: {directory_path} in {project_id}")
             return archived_count
 
@@ -342,10 +334,23 @@ class ArchiveClass:
             k: list(v) for k, v in groupby(active_files, lambda x: x["folder"])
         }
 
+        # make a parallel-running list of things tagged 'never archive'
+        # which also needs passing to _archive_directory_based_on_path
+        never_archive = find_never_archive_by_folder_paths_parallel(
+            directory_list, self.env.PROJECT_52
+        )
+        never_archive = {
+            k: list(v) for k, v in groupby(never_archive, lambda x: x["folder"])
+        }
+
         # directories in to-be-archived list in stagingarea52
         for directory in directory_list:
-            archived_num = self._archive_directory_based_on_directory_path(
-                active_files,
+            active_files_in_directory = active_files[directory]
+            never_archive_files_in_directory = never_archive[directory]
+
+            archived_num = self._archive_directory_based_on_path(
+                active_files_in_directory,
+                never_archive_files_in_directory,
                 self.env.PROJECT_52,
                 directory,
             )
