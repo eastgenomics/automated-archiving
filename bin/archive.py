@@ -133,17 +133,10 @@ class ArchiveClass:
 
         return call_in_parallel(_archive, file_ids, project=project)
 
-    def list_files_to_archive_per_project(self, list_of_projects: list) -> set:
+    def check_projects_still_ready_to_archive(self, list_of_projects: list) -> set:
         """
-        Checks that functions and their constituent files, previously listed
-         as ready-to-archive, are still in a valid state.
-        Adds the valid project ids and files to a dict-of-lists ready for
-        bulk archiving.
-
-        Param: a list, list_of_projects, which gives project IDs for assessment
-
-        Returns: dict of ready-to-archive files in format
-        {project-ids: [file-1, file-2]}
+        Checks that projects are still ready to archive.
+        Adds those that are still ready to a list ready for bulk archiving.
         """
         logger.info(f"{len(list_of_projects)} projects found for archiving.")
 
@@ -156,7 +149,8 @@ class ArchiveClass:
             for k, v in groupby(project_details, lambda x: x["project"])
         }
 
-        project_files_cleared_for_archive = dict()
+        # First make sure that projects are still ready for archive
+        projects_cleared_for_archive = list()
 
         for project_id in list_of_projects:
             project_detail = project_details.get(project_id)
@@ -178,36 +172,10 @@ class ArchiveClass:
                 self.env.ARCHIVE_MODIFIED_MONTH, modified_epoch
             ):
                 # if project is tagged with 'archive'
-                # or project is inactive in last
-                # 'archived_modified_month' month
-                # both result in the same archiving process
-
-                # exclude files that match the exclude regex
-                file_ids_to_exclude = self._find_file_ids_that_match_regex(
-                    self.env.AUTOMATED_REGEX_EXCLUDE, project_id
-                )
-
-                for file in dx.find_data_objects(
-                    project=project_id,
-                    classname="file",
-                    archival_state="live",
-                    folder="/",
-                ):
-                    if (
-                        file["id"] in file_ids_to_exclude
-                    ):  # skip file-id that match exclude regex
-                        continue
-
-                    # this file needs to be archived, add to dict
-                    if project_files_cleared_for_archive.get(project_id):
-                        project_files_cleared_for_archive[project_id].append(
-                            file["id"]
-                        )
-                    else:
-                        project_files_cleared_for_archive[project_id] = [
-                            file["id"]
-                        ]
-
+                # or project is inactive in last 'archived_modified_month',
+                # then it should still be archived
+                projects_cleared_for_archive.append(project_id)
+            
             else:
                 # project not older than ARCHIVE_MODIFIED_MONTH
                 # meaning project has been modified recently, so skip
@@ -215,6 +183,64 @@ class ArchiveClass:
                     f"RECENTLY MODIFIED: {project_name}. Skip archiving!"
                 )
                 continue
+
+    def find_live_files_parallel_multiproject(self, projects):
+        """
+        Search for all live files in each of a list of projects.
+        Runs in parallel.
+        """
+        def _find(project_id):
+            """
+            Just get everything with the 'file' classname
+            and the archival state 'live' for a given project
+            """
+            return list(
+                dx.find_data_objects(
+                    project=project_id,
+                    classname="file",
+                    archival_state="live",
+                    folder="/",
+                )
+            )
+
+        return call_in_parallel(_find, projects)
+
+    def check_files_ready_to_archive(self, projects_and_files: dict) -> set:
+        """
+        Checks that files in 'ready to archive' projects, meet the
+        file-specific archiving criteria.
+        Adds the valid project ids and files to a dict-of-lists ready for
+        bulk archiving.
+
+        Param: a dictionary, projects_and_file, in which the key is a project ID
+        and the value is a list of dx file information
+
+        Returns: dict of ready-to-archive files in format
+        {project-ids: [file-1, file-2]}
+        """
+        project_files_cleared_for_archive = dict()
+
+        for project_id, files in projects_and_files.items():
+            # exclude files that match the exclude regex
+            file_ids_to_exclude = self._find_file_ids_that_match_regex_no_api(
+                self.env.AUTOMATED_REGEX_EXCLUDE, files
+            )
+
+            for file in files:
+                if (
+                    file["id"] in file_ids_to_exclude
+                ):  # skip file-id that match exclude regex
+                    continue
+
+                # this file needs to be archived, add to dict
+                if project_files_cleared_for_archive.get(project_id):
+                    project_files_cleared_for_archive[project_id].append(
+                        file["id"]
+                    )
+                else:
+                    project_files_cleared_for_archive[project_id] = [
+                        file["id"]
+                    ]
 
         return project_files_cleared_for_archive
 

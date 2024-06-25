@@ -1,4 +1,5 @@
 from typing import Optional
+from itertools import groupby
 
 from bin.helper import get_logger
 
@@ -60,11 +61,28 @@ def main():
     slack.notify({"tars": tars})
 
     if datetime.day in [1, 15]:
+        # check that projects are still ready to archive, and if so,
+        # check that their constituent files pass archive criteria too.
+        # Finally, archive the files.
         checked_projects_to_archive = (
-            archive.list_files_to_archive_per_project(
+            archive.check_projects_still_ready_to_archive(
                 projects_marked_for_archiving
             )
         )
+
+        files = archive.find_live_files_parallel_multiproject(
+            checked_projects_to_archive
+            )
+        files = {
+            k: list(v) for k, v in groupby(files, lambda x: x["project"])
+        }
+
+        files_to_archive = (
+            archive.check_files_ready_to_archive(
+                files
+            )
+        )
+
         if not archive.env.ARCHIVE_DEBUG:  # if running in production
             # run the archiving
             for (
