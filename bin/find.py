@@ -397,6 +397,7 @@ class FindClass:
             # if there's 'never-archive' tag in any file, continue
             if "never-archive" in tags:
                 logger.info('Directory has "never-archive" tag. Skip.')
+                continue
 
             self.archiving_directories.append(folder)
             self.archiving_directories_slack.append(
