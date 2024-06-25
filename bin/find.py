@@ -296,7 +296,6 @@ class FindClass:
 
         # sort 003 project by user for slack notification
         self.sort_slack_3_by_user(user_to_project_id_and_dnanexus)
-        
 
     def sort_slack_3_by_user(self, user_to_project_id_and_dnanexus):
         """
@@ -322,7 +321,6 @@ class FindClass:
                 dnanexus_link = row["link"]
 
                 self.archiving_projects_3_slack.append(dnanexus_link)
-
 
     def find_files_by_folder_paths_parallel(self, project, paths) -> list:
         """
@@ -476,7 +474,7 @@ class FindClass:
                     f"Precision project {project_id} not found on DNAnexus. Skip."
                 )
                 continue  # skip
-            
+
             projects_still_exist.append(project)
             project_to_prefix[
                 project_id
@@ -516,9 +514,7 @@ class FindClass:
                 )  # get latest modified date
 
                 # see if latest modified date is more than precision_month
-                if older_than(
-                    self.env.PRECISION_MONTH, latest_modified_date
-                ):
+                if older_than(self.env.PRECISION_MONTH, latest_modified_date):
                     # if the oldest modified file is older than precision_month
                     # add the folder path and project-id to memory pickle
                     self.archiving_precision_directories.append(

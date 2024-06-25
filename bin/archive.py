@@ -24,9 +24,7 @@ class ArchiveClass:
     def __init__(self, env: EnvironmentVariableClass):
         self.env = env
 
-    def _get_projects_describe(
-        self, project_ids: list
-    ) -> Optional[dict]:
+    def _get_projects_describe(self, project_ids: list) -> Optional[dict]:
         """
         Fetch describe of a list of projects.
         Return None if failed.
@@ -118,40 +116,22 @@ class ArchiveClass:
         """
 
         def _archive(file, **find_data_args):
-            dx.DXFile(
-                file,
-                project=find_data_args["project"],
-            ).archive()
+            try:
+                dx.DXFile(
+                    file,
+                    project=find_data_args["project"],
+                ).archive()
+            except (
+                dx.exceptions.ResourceNotFound,
+                dx.exceptions.PermissionDenied,
+                dx.exceptions.InvalidInput,
+                dx.exceptions.InvalidState,
+            ) as dnanexus_error:  # catching DNAnexus-related errors
+                logger.error(dnanexus_error.error_message())
+            except Exception as e:  # non-DNAnexus related errors
+                logger.error(e)
 
         return call_in_parallel(_archive, file_ids, project=project)
-
-    def _archive_file(
-        self,
-        file_id: str,
-        project_id: str,
-    ) -> None:
-        """
-        Function to archive file-id on DNAnexus
-
-        Parameters:
-            file_id: file-id to be archived
-            project_id: project-id where the file is in
-        """
-        try:
-            dx.DXFile(
-                file_id,
-                project=project_id,
-            ).archive()
-
-        except (
-            dx.exceptions.ResourceNotFound,
-            dx.exceptions.PermissionDenied,
-            dx.exceptions.InvalidInput,
-            dx.exceptions.InvalidState,
-        ) as dnanexus_error:  # catching DNAnexus-related errors
-            logger.error(dnanexus_error.error_message())
-        except Exception as e:  # non-DNAnexus related errors
-            logger.error(e)
 
     def list_files_to_archive_per_project(self, list_of_projects: list) -> set:
         """
@@ -249,9 +229,9 @@ class ArchiveClass:
         Function to archive files in directories
 
         Arguments:
-        :param: active_files: active file results from a dxpy search for 
+        :param: active_files: active file results from a dxpy search for
         directory_path
-        :param: never_archive_files: never-archive tagged file results 
+        :param: never_archive_files: never-archive tagged file results
         from a dxpy search for directory_path
         :param: project_id: project-id
         :param: directory_path: directory path in the project-id
@@ -260,7 +240,7 @@ class ArchiveClass:
         """
         archived_count = 0
 
-        # check for 'never-archive' tag in directory
+        # check for 'never-archive' tag on any file in the directory
         # can't just use the existing file in case there's 'never-archive' on archived material
         # Seems like it shouldn't be possible, but I'm not ruling out a weird fluke
         if never_archive_files:
@@ -340,7 +320,8 @@ class ArchiveClass:
             directory_list, self.env.PROJECT_52
         )
         never_archive = {
-            k: list(v) for k, v in groupby(never_archive, lambda x: x["folder"])
+            k: list(v)
+            for k, v in groupby(never_archive, lambda x: x["folder"])
         }
 
         # directories in to-be-archived list in stagingarea52

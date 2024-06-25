@@ -120,11 +120,13 @@ def call_in_parallel(func, items, **find_data_args) -> list:
 
     return results
 
+
 def find_never_archive_by_folder_paths_parallel(paths, project):
     """
     Finding files with parallelised search, known project, list of paths.
     Only get files tagged with 'never-archive'.
     """
+
     def _find(path, **find_data_args):
         """
         Run individual search job
@@ -137,7 +139,7 @@ def find_never_archive_by_folder_paths_parallel(paths, project):
                 limit=1,
             )
         )
-    
+
     return call_in_parallel(_find, paths, project=project)
 
 
