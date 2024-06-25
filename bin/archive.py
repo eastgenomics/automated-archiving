@@ -6,8 +6,7 @@ import re
 
 from bin.util import (
     older_than,
-    find_active_files_by_folder_paths_parallel,
-    find_never_archive_by_folder_paths_parallel,
+    find_files_by_folder_paths_parallel,
     call_in_parallel,
 )
 from bin.helper import get_logger
@@ -247,7 +246,6 @@ class ArchiveClass:
     def _archive_directory_based_on_path(
         self,
         active_files: list,
-        never_archive_files: list,
         project_id: str,
         directory_path: str,
     ) -> int:
@@ -257,21 +255,12 @@ class ArchiveClass:
         Arguments:
         :param: active_files: active file results from a dxpy search for
         directory_path
-        :param: never_archive_files: never-archive tagged file results
-        from a dxpy search for directory_path
         :param: project_id: project-id
         :param: directory_path: directory path in the project-id
 
         Returns: number of files archived in the directory
         """
         archived_count = 0
-
-        # check for 'never-archive' tag on any file in the directory
-        # can't just use the existing file in case there's 'never-archive' on archived material
-        # Seems like it shouldn't be possible, but I'm not ruling out a weird fluke
-        if never_archive_files:
-            logger.info(f"NEVER ARCHIVE: {directory_path} in {project_id}")
-            return archived_count
 
         # check if there's any files modified in the last
         # ARCHIVE_MODIFIED_MONTH
@@ -333,37 +322,36 @@ class ArchiveClass:
 
         # get all files in the directory_list, with tags
         # group by directory for convenience
-        active_files = find_active_files_by_folder_paths_parallel(
+        files = find_files_by_folder_paths_parallel(
             directory_list, self.env.PROJECT_52
         )
-        active_files = {
-            k: list(v) for k, v in groupby(active_files, lambda x: x["folder"])
-        }
-
-        # make a parallel-running list of things tagged 'never archive'
-        # which also needs passing to _archive_directory_based_on_path
-        never_archive = find_never_archive_by_folder_paths_parallel(
-            directory_list, self.env.PROJECT_52
-        )
-        never_archive = {
-            k: list(v)
-            for k, v in groupby(never_archive, lambda x: x["folder"])
+        files = {
+            k: list(v) for k, v in groupby(files, lambda x: x["folder"])
         }
 
         # directories in to-be-archived list in stagingarea52
         for directory in directory_list:
-            active_files_in_directory = active_files[directory]
-            never_archive_files_in_directory = never_archive[directory]
+            all_files_in_directory = files[directory]
+            
+            # if any files are tagged 'never-archive' we want to skip the whole directory
+            # this includes even files that are somehow archived...
+            tags: list[str] = [tag.lower() for tag in all_files_in_directory["describe"]["tags"]]
+            if "never_archive" in tags:
+                logger.info(f"NEVER ARCHIVE: {directory} in {self.env.PROJECT_52}")
+            else:
+                # get only active_files 
+                active_files_in_directory = []
+                for file in all_files_in_directory:
+                    if file["archival_state"] == "live":
+                        active_files_in_directory.append(file)
 
-            archived_num = self._archive_directory_based_on_path(
-                active_files_in_directory,
-                never_archive_files_in_directory,
-                self.env.PROJECT_52,
-                directory,
-            )
-
-            if archived_num > 0:
-                archived_dict[directory] = archived_num
+                archived_num = self._archive_directory_based_on_path(
+                    active_files_in_directory,
+                    self.env.PROJECT_52,
+                    directory,
+                )
+                if archived_num > 0:
+                    archived_dict[directory] = archived_num
 
         return archived_dict
 
@@ -396,27 +384,35 @@ class ArchiveClass:
         for project_id, folder_path in project_id_to_folder.items():
             # check again the same criteria if latest modified date is older than precision_month
             # because it might have been modified recently
-            active_files = find_active_files_by_folder_paths_parallel(
+            files = find_files_by_folder_paths_parallel(
                 folder_path, project_id
             )
 
-            if not active_files:  # no active file, everything archived
+            if not files:
                 continue
 
+            tags: list[str] = [tag.lower() for tag in files["describe"]["tags"]]
+            if "never_archive" in tags:
+                logger.info(f"NEVER ARCHIVE: {folder_path} in {self.env.PRECISION_ARCHIVING}")
+            else:
+                # get only active_files 
+                active_files_in_directory = []
+                for file in files:
+                    if file["archival_state"] == "live":
+                        active_files_in_directory.append(file)
+
             latest_modified_date = max(
-                [file["describe"]["modified"] for file in active_files]
+                [file["describe"]["modified"] for file in files]
             )  # get latest modified date
 
             # see if latest modified date is more than precision_month
-            is_older_than: bool = older_than(
+            if older_than(
                 self.env.PRECISION_MONTH, latest_modified_date
-            )
-
-            if is_older_than:
+            ):
                 # archive the folder in the project-id
                 if not self.env.ARCHIVE_DEBUG:
                     # archive the folder
-                    active_file_ids = [x for x in active_files["id"]]
+                    active_file_ids = [x for x in active_files_in_directory["id"]]
                     self._parallel_archive_file(
                         self, active_file_ids, project_id
                     )

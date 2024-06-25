@@ -173,6 +173,37 @@ def find_active_files_by_folder_paths_parallel(paths, project):
     return call_in_parallel(_find, paths, project=project)
 
 
+def find_files_by_folder_paths_parallel(paths, project):
+    """
+    Finding files with parallelised search, known project, list of paths.
+    Return tags and archival states, so that we can inspect for live files
+    and the presence of 'never-archive' tags.
+    """
+
+    def _find(path, **find_data_args):
+        """
+        Run individual search job
+        """
+        return list(
+            dx.find_data_objects(
+                classname="file",
+                project=find_data_args["project"],
+                folder=path,
+                describe={
+                    "fields": {
+                        "created": True,
+                        "archivalState": True,
+                        "tags": True,
+                        "modified": True,
+                    }
+                },
+            )
+        )
+
+    return call_in_parallel(_find, paths, project=project)
+
+
+
 def read_or_new_pickle(path: str) -> dict:
     """
     Read stored pickle memory for the script

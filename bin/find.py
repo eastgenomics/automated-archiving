@@ -7,7 +7,7 @@ from itertools import groupby
 from bin.environment import EnvironmentVariableClass
 from bin.helper import get_logger
 from bin.util import (
-    find_active_files_by_folder_paths_parallel,
+    find_files_by_folder_paths_parallel,
     older_than,
     read_or_new_pickle,
     write_to_pickle,
@@ -236,10 +236,10 @@ class FindClass:
         user_to_project_id_and_dnanexus = collections.defaultdict(list)
 
         # get archival statuses for each project
-        archival_statuses = self.get_archival_status_parallel(
+        file_archival_statuses = self.get_archival_status_parallel(
             qualified_projects
         )
-        archival_statuses = {
+        file_archival_statuses = {
             k: list(v)
             for k, v in groupby(archival_statuses, lambda x: x["project"])
         }
@@ -251,43 +251,42 @@ class FindClass:
                 )
 
             project_name: str = v["describe"]["name"]
-            tags: list[str] = [tag.lower() for tag in v["describe"]["tags"]]
+            project_tags: list[str] = [tag.lower() for tag in v["describe"]["tags"]]
             trimmed_project_id = project_id.lstrip("project-")
             user: str = v["describe"]["createdBy"]["user"]
 
-            if "never-archive" in tags:
+            if "never-archive" in project_tags:
                 logger.info(
                     f'Project {project_name} is tagged with "never-archive". Skip.'
                 )
-                continue  # project tagged with 'never-archive'
-
-            # get all files' archivalStatus
-            project_statuses = archival_statuses.get(project_id)
-            statuses = set(
-                [x["describe"]["archivalState"] for x in project_statuses],
-            )
-
-            if "live" in statuses:
-                pass  # there is something to be archived
             else:
-                logger.info(f"Everything archived in {project_id}. Skip.")
-                continue  # everything has been archived
-
-            # add project-id to archiving list (002 and 003)
-            self.archiving_projects.append(project_id)
-
-            # below are preparation for slack notification
-            dnanexus_project_url = f"<{self.env.DNANEXUS_URL_PREFIX}/{trimmed_project_id}/|{project_name}>"
-
-            if project_name.startswith("002"):
-                self.archiving_projects_2_slack.append(dnanexus_project_url)
-            else:
-                user_to_project_id_and_dnanexus[user].append(
-                    {
-                        "id": project_id,
-                        "link": dnanexus_project_url,
-                    }
+                # get all files' archivalStatus
+                project_statuses = file_archival_statuses.get(project_id)
+                statuses = set(
+                    [x["describe"]["archivalState"] for x in project_statuses],
                 )
+
+                if "live" in statuses:
+                    pass  # there is something to be archived
+                else:
+                    logger.info(f"Everything archived in {project_id}. Skip.")
+                    continue  # everything has been archived
+
+                # add project-id to archiving list (002 and 003)
+                self.archiving_projects.append(project_id)
+
+                # below are preparation for slack notification
+                dnanexus_project_url = f"<{self.env.DNANEXUS_URL_PREFIX}/{trimmed_project_id}/|{project_name}>"
+
+                if project_name.startswith("002"):
+                    self.archiving_projects_2_slack.append(dnanexus_project_url)
+                else:
+                    user_to_project_id_and_dnanexus[user].append(
+                        {
+                            "id": project_id,
+                            "link": dnanexus_project_url,
+                        }
+                    )
 
         # get everything ready for slack notification
         self.archiving_projects_2_slack = sorted(
@@ -373,9 +372,9 @@ class FindClass:
         project52 = self.env.PROJECT_52.lstrip("project-")
         STAGING_PREFIX = f"{self.env.DNANEXUS_URL_PREFIX}/{project52}/data"
 
-        # retrieve live files in every folder
+        # retrieve files in every folder
         # then group the files per-folder
-        project_files = find_active_files_by_folder_paths_parallel(
+        project_files = find_files_by_folder_paths_parallel(
             self.env.PROJECT_52, trimmed_to_original_folder_path.values()
         )
         project_files = {
@@ -384,8 +383,7 @@ class FindClass:
         }
         # look at the files in each path for the project
         for folder in trimmed_to_original_folder_path.values():
-            # in this folder, get all files
-            # if any of the files 
+            # get files in this folder
             folder_files = project_files.get(folder)
             
             tags = set(
@@ -399,6 +397,8 @@ class FindClass:
                 logger.info('Directory has "never-archive" tag. Skip.')
                 continue
 
+            # TODO: filter out files so you only get 'live' ones
+
             self.archiving_directories.append(folder)
             self.archiving_directories_slack.append(
                 f"<{STAGING_PREFIX}{folder}|{folder}>"
@@ -410,6 +410,8 @@ class FindClass:
         """
         return dt.datetime.fromtimestamp(epoch / 1000.0)
 
+    #TODO: staging-52 does checks for "never-archive"
+    #TODO: add this to precisions?
     def find_precisions(
         self,
     ) -> None:
@@ -428,7 +430,6 @@ class FindClass:
                 project = dx.DXProject(project_id)
             except Exception:
                 # project is not found by dnanexus
-                # incorrect project-id
                 logger.info(
                     f"Precision project {project_id} not found on DNAnexus. Skip."
                 )
@@ -447,8 +448,7 @@ class FindClass:
             ).get("folders", [])
 
             # parallel-fetch the files for the project
-            # only get 'live' status files
-            project_files = find_active_files_by_folder_paths_parallel(
+            project_files = find_files_by_folder_paths_parallel(
                 folders,
                 project["id"],
             )
@@ -457,12 +457,13 @@ class FindClass:
                 for k, v in groupby(project_files, lambda x: x["folder"])
             }
 
-            # for each folder, check whether the contents were modified recently
-            # enough to archive
+            # for each folder, check whether the contents are live, never-archive,
+            # or were modified recently enough to archive
             for folder_path in folders:
                 files = project_files.get(folder_path)
+                active_files = [file for file in project_files if file["describe"]["archivalState"] == "live"]
 
-                if not files:  # if no file in folder
+                if not active_files:  # if no file in folder
                     logger.info(
                         f"No live files found in {project_id}:{folder_path}. Skip."
                     )
