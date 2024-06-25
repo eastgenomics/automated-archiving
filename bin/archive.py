@@ -378,8 +378,8 @@ class ArchiveClass:
                 # archive the folder in the project-id
                 if not self.env.ARCHIVE_DEBUG:
                     # archive the folder
-                    for file in active_files:
-                        self._archive_file(file["id"], project_id)
+                    active_file_ids = [x for x in active_files["id"]]
+                    self._parallel_archive_file(self, active_file_ids, project_id)
 
                     archived_precisions[project_id].append(folder_path)
                     logger.info(f"{project_id}:{folder_path} archived!")
