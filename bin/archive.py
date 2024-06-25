@@ -273,26 +273,31 @@ class ArchiveClass:
             directory_path,
         )
 
-        if not self.env.ARCHIVE_DEBUG:  # if running in production
-            for file in dx.find_data_objects(
-                project=project_id,
-                classname="file",
-                archival_state="live",
-                folder=directory_path,
-            ):
-                if (
-                    file["id"] in excluded_file_ids
-                ):  # skip file-id that match exclude regex
-                    continue
+        # get a collection of the files in this project/directory that 
+        # should be archived
+        active_file_ids = list()
 
-                self._archive_file(file["id"], project_id)
+        for file in dx.find_data_objects(
+            project=project_id,
+            classname="file",
+            archival_state="live",
+            folder=directory_path,
+        ):
+            if (
+                file["id"] not in excluded_file_ids
+            ):  
+                # only archive file-id that DON'T match exclude regex
+                active_file_ids.append(file["id"])
 
-                archived_count += 1
+        # archive the files if running in production
+        if not self.env.ARCHIVE_DEBUG:
+            active_file_ids = list(set(active_file_ids))
+            self._parallel_archive_file(self, active_file_ids, project_id)
 
-            if archived_count > 0:
-                logger.info(
-                    f"{archived_count} files archived in {directory_path} in {project_id}"
-                )
+            archived_count = len(active_file_ids)
+            logger.info(
+                f"{archived_count} files archived in {directory_path} in {project_id}"
+            )
         else:
             logger.info(
                 f"Running in DEBUG mode. Skip archiving {directory_path} in {project_id}!"
