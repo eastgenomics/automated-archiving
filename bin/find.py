@@ -453,6 +453,7 @@ class FindClass:
         """
         logger.info("Finding precision projects..")
 
+        # assemble a dictionary of project IDs with their directories
         project_to_prefix = dict()
         for project_id in self.env.PRECISION_ARCHIVING:
             try:
@@ -465,8 +466,8 @@ class FindClass:
                 )
                 continue  # skip
 
-            PRECISION_PREFIX = f"{self.env.DNANEXUS_URL_PREFIX}/{project_id.lstrip('project-')}/data"
-            project_to_prefix[project_id] = PRECISION_PREFIX
+            project_to_prefix[project_id] = f"{self.env.DNANEXUS_URL_PREFIX}/{project_id.lstrip('project-')}/data"
+            
 
         for project_id in self.env.PRECISION_ARCHIVING:
             # get all folders within the project
@@ -479,7 +480,7 @@ class FindClass:
             # only get 'live' status files
             project_files = find_precision_files_by_folder_paths_parallel(
                 folders,
-                self.env.PROJECT_52,
+                project_id,
             )
             project_files = {
                 k: list(v)
