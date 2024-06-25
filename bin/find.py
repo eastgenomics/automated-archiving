@@ -464,6 +464,8 @@ class FindClass:
 
         # assemble a dictionary of project IDs with their directories
         project_to_prefix = dict()
+
+        projects_still_exist = list()
         for project_id in self.env.PRECISION_ARCHIVING:
             try:
                 project = dx.DXProject(project_id)
@@ -474,12 +476,13 @@ class FindClass:
                     f"Precision project {project_id} not found on DNAnexus. Skip."
                 )
                 continue  # skip
-
+            
+            projects_still_exist.append(project)
             project_to_prefix[
                 project_id
             ] = f"{self.env.DNANEXUS_URL_PREFIX}/{project_id.lstrip('project-')}/data"
 
-        for project_id in self.env.PRECISION_ARCHIVING:
+        for project in projects_still_exist:
             # get all folders within the project
             folders = project.list_folder(
                 only="folders",
@@ -490,7 +493,7 @@ class FindClass:
             # only get 'live' status files
             project_files = find_active_files_by_folder_paths_parallel(
                 folders,
-                project_id,
+                project["id"],
             )
             project_files = {
                 k: list(v)
@@ -513,11 +516,9 @@ class FindClass:
                 )  # get latest modified date
 
                 # see if latest modified date is more than precision_month
-                is_older_than: bool = older_than(
+                if older_than(
                     self.env.PRECISION_MONTH, latest_modified_date
-                )
-
-                if is_older_than:
+                ):
                     # if the oldest modified file is older than precision_month
                     # add the folder path and project-id to memory pickle
                     self.archiving_precision_directories.append(
