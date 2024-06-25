@@ -375,7 +375,7 @@ class FindClass:
 
         # retrieve live files in every folder
         # then group the files per-folder
-        project_files = self.find_active_files_by_folder_paths_parallel(
+        project_files = find_active_files_by_folder_paths_parallel(
             self.env.PROJECT_52, trimmed_to_original_folder_path.values()
         )
         project_files = {
