@@ -48,7 +48,7 @@ class ArchiveClass:
                 return None
 
         return call_in_parallel(
-            func=_get, items=project_ids, find_data_args=None
+            func=_get, items=project_ids
         )
 
     def _find_file_ids_that_match_regex_no_api(

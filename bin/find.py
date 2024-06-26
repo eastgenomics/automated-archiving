@@ -212,7 +212,7 @@ class FindClass:
             )
 
         return call_in_parallel(
-            func=_find, items=projects, find_data_args=None
+            func=_find, items=projects
         )
 
     def find_projects(
