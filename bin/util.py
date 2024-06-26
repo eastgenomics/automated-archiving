@@ -121,36 +121,6 @@ def call_in_parallel(func, items, **find_data_args) -> list:
     return results
 
 
-def find_active_files_by_folder_paths_parallel(paths, project):
-    """
-    Finding files with parallelised search, known project, list of paths.
-    Only get ACTIVE files.
-    """
-
-    def _find(path, **find_data_args):
-        """
-        Run individual search job
-        """
-        return list(
-            dx.find_data_objects(
-                classname="file",
-                project=find_data_args["project"],
-                folder=path,
-                archival_state="live",
-                describe={
-                    "fields": {
-                        "created": True,
-                        "archivalState": True,
-                        "tags": True,
-                        "modified": True,
-                    }
-                },
-            )
-        )
-
-    return call_in_parallel(_find, paths, project=project)
-
-
 def find_files_by_folder_paths_parallel(paths, project):
     """
     Finding files with parallelised search, known project, list of paths.
