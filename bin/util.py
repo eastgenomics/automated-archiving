@@ -99,7 +99,7 @@ def call_in_parallel(func, items, **find_data_args) -> list:
     with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
         if find_data_args:
             concurrent_jobs = {
-                executor.submit(func, item, find_data_args): item
+                executor.submit(func, item, **find_data_args): item
                 for item in items
             }
         else:
