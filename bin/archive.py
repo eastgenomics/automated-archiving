@@ -146,8 +146,8 @@ class ArchiveClass:
         # their constituent qualifying files to project_files_cleared_for_archive
         project_details = self._get_projects_describe(list_of_projects)
         project_details = {
-            k: list(v)
-            for k, v in groupby(project_details, lambda x: x["project"])
+            k: list(v) for k, v in groupby(project_details,
+                                           lambda x: x["project"])
         }
 
         # First make sure that projects are still ready for archive

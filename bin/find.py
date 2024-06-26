@@ -240,8 +240,8 @@ class FindClass:
             qualified_projects
         )
         file_archival_statuses = {
-            k: list(v)
-            for k, v in groupby(file_archival_statuses, lambda x: x["project"])
+            k: list(v) for k, v in groupby(file_archival_statuses,
+                                           lambda x: x["project"])
         }
 
         for index, (project_id, v) in enumerate(qualified_projects.items()):
@@ -383,8 +383,8 @@ class FindClass:
             self.env.PROJECT_52, trimmed_to_original_folder_path.values()
         )
         project_files = {
-            k: list(v)
-            for k, v in groupby(project_files, lambda x: x["folder"])
+            k: list(v) for k, v in groupby(project_files,
+                                           lambda x: x["folder"])
         }
         # look at the files in each path for the project
         for folder in trimmed_to_original_folder_path.values():
@@ -454,10 +454,8 @@ class FindClass:
                 project["id"],
             )
             folder_files = {
-                k: list(v)
-                for k, v in groupby(
-                    folder_files, lambda x: x["describe"]["folder"]
-                )
+                k: list(v) for k, v in groupby(folder_files,
+                                               lambda x: x["describe"]["folder"])
             }
 
             # for each folder, check whether the contents are live, never-archive,
