@@ -230,7 +230,8 @@ class FindClass:
         qualified_projects = self._get_old_enough_projects()
 
         logger.info(
-            f"Number of 'old enough' projects found: {len(qualified_projects)}!"
+            f"Number of 'old enough' projects found: "
+            f"{len(qualified_projects)}!"
         )
 
         user_to_project_id_and_dnanexus = collections.defaultdict(list)
