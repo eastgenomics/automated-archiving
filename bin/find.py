@@ -325,9 +325,10 @@ class FindClass:
         self,
     ) -> None:
         """
-        Function to find directories in staging-52 in which their
-        parent project (002 or 003) are not modified in the last
-        AUTOMATED_MONTH_002 or AUTOMATED_MONTH_003 months
+        Function to find directories in staging-52 parent projects (002 or
+        003). The projects have already been checked to ensure they've not
+        been modified in the last AUTOMATED_MONTH_002 or AUTOMATED_MONTH_003
+        months.
         """
 
         logger.info("Finding directories..")
@@ -414,8 +415,6 @@ class FindClass:
         """
         return dt.datetime.fromtimestamp(epoch / 1000.0)
 
-    #TODO: staging-52 does checks for "never-archive"
-    #TODO: add this to precisions?
     def find_precisions(
         self,
     ) -> None:
@@ -437,7 +436,8 @@ class FindClass:
                     f"Precision project {project_id} not found on DNAnexus. Skip."
                 )
                 continue  # skip
-
+            
+            # there are specific prefixes for the Slack message, for some reason
             project_to_prefix[
                 project_id
             ] = f"{self.env.DNANEXUS_URL_PREFIX}/{project_id.lstrip('project-')}/data"
@@ -446,40 +446,43 @@ class FindClass:
             folders = self._get_folders_in_project(project)
 
             # parallel-fetch the files for the project
-            project_files = find_files_by_folder_paths_parallel(
+            folder_files = find_files_by_folder_paths_parallel(
                 folders,
                 project["id"],
             )
-            project_files = {
+            folder_files = {
                 k: list(v)
-                for k, v in groupby(project_files, lambda x: x["folder"])
+                for k, v in groupby(folder_files, lambda x: x["describe"]["folder"])
             }
 
             # for each folder, check whether the contents are live, never-archive,
             # or were modified recently enough to archive
-            for folder_path in folders:
-                files = project_files.get(folder_path)
-                active_files = [file for file in project_files if file["describe"]["archivalState"] == "live"]
-
-                if not active_files:  # if no file in folder
-                    logger.info(
-                        f"No live files found in {project_id}:{folder_path}. Skip."
-                    )
-                    continue
-
+            for folder, files in folder_files.items():
+                active_files = [file for file in files if file["describe"]["archivalState"] == "live"]
+                project_tags = [file["describe"]["tags"] for file in files]
                 latest_modified_date = max(
                     [file["describe"]["modified"] for file in files]
                 )  # get latest modified date
+
+                if "never-archive" in project_tags:
+                    logger.info(
+                        f'Folder {folder} is tagged with "never-archive". Skip.'
+                    )
+                    if not active_files:  # if no file in folder
+                        logger.info(
+                            f"No live files found in {project_id}:{folder}. Skip."
+                        )
+                        continue
 
                 # see if latest modified date is more than precision_month
                 if older_than(self.env.PRECISION_MONTH, latest_modified_date):
                     # if the oldest modified file is older than precision_month
                     # add the folder path and project-id to memory pickle
                     self.archiving_precision_directories.append(
-                        f"{project_id}|{folder_path}"
+                        f"{project_id}|{folder}"
                     )
                     self.archiving_precision_directories_slack.append(
-                        f"<{project_to_prefix[project_id]}{folder_path}|{folder_path}>"
+                        f"<{project_to_prefix[project_id]}{folder}|{folder}>"
                     )
 
     def save_to_pickle(self):
