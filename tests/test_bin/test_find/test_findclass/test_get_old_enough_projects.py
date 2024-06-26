@@ -10,10 +10,9 @@ def test_get_old_enough_projects():
     """
     Tests different cases with FindClass._get_old_enough_projects
     Cases represented by mock dataset:
-    - 
+    -
     """
     # set up the basic pre-reqs for the FindClass
     env = EnvironmentVariableClass()
     find = FindClass(env, get_members("members.ini"))
     # TODO: continue
-

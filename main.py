@@ -72,16 +72,10 @@ def main():
 
         files = archive.find_live_files_parallel_multiproject(
             checked_projects_to_archive
-            )
-        files = {
-            k: list(v) for k, v in groupby(files, lambda x: x["project"])
-        }
-
-        files_to_archive = (
-            archive.check_files_ready_to_archive(
-                files
-            )
         )
+        files = {k: list(v) for k, v in groupby(files, lambda x: x["project"])}
+
+        files_to_archive = archive.check_files_ready_to_archive(files)
 
         if not archive.env.ARCHIVE_DEBUG:  # if running in production
             # run the archiving

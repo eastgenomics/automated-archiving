@@ -251,7 +251,9 @@ class FindClass:
                 )
 
             project_name: str = v["describe"]["name"]
-            project_tags: list[str] = [tag.lower() for tag in v["describe"]["tags"]]
+            project_tags: list[str] = [
+                tag.lower() for tag in v["describe"]["tags"]
+            ]
             trimmed_project_id = project_id.lstrip("project-")
             user: str = v["describe"]["createdBy"]["user"]
 
@@ -279,7 +281,9 @@ class FindClass:
                 dnanexus_project_url = f"<{self.env.DNANEXUS_URL_PREFIX}/{trimmed_project_id}/|{project_name}>"
 
                 if project_name.startswith("002"):
-                    self.archiving_projects_2_slack.append(dnanexus_project_url)
+                    self.archiving_projects_2_slack.append(
+                        dnanexus_project_url
+                    )
                 else:
                     user_to_project_id_and_dnanexus[user].append(
                         {
@@ -386,7 +390,7 @@ class FindClass:
         for folder in trimmed_to_original_folder_path.values():
             # get files in this folder
             folder_files = project_files.get(folder)
-            
+
             tags = set(
                 itertools.chain.from_iterable(
                     [x["describe"]["tags"] for x in folder_files]
@@ -405,9 +409,8 @@ class FindClass:
             if "live" in statuses:
                 self.archiving_directories.append(folder)
                 self.archiving_directories_slack.append(
-                f"<{STAGING_PREFIX}{folder}|{folder}>"
-            )
-
+                    f"<{STAGING_PREFIX}{folder}|{folder}>"
+                )
 
     def _turn_epoch_to_datetime(self, epoch: int) -> dt.datetime:
         """
@@ -436,7 +439,7 @@ class FindClass:
                     f"Precision project {project_id} not found on DNAnexus. Skip."
                 )
                 continue  # skip
-            
+
             # there are specific prefixes for the Slack message, for some reason
             project_to_prefix[
                 project_id
@@ -452,13 +455,19 @@ class FindClass:
             )
             folder_files = {
                 k: list(v)
-                for k, v in groupby(folder_files, lambda x: x["describe"]["folder"])
+                for k, v in groupby(
+                    folder_files, lambda x: x["describe"]["folder"]
+                )
             }
 
             # for each folder, check whether the contents are live, never-archive,
             # or were modified recently enough to archive
             for folder, files in folder_files.items():
-                active_files = [file for file in files if file["describe"]["archivalState"] == "live"]
+                active_files = [
+                    file
+                    for file in files
+                    if file["describe"]["archivalState"] == "live"
+                ]
                 project_tags = [file["describe"]["tags"] for file in files]
                 latest_modified_date = max(
                     [file["describe"]["modified"] for file in files]

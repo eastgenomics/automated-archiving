@@ -132,7 +132,9 @@ class ArchiveClass:
 
         return call_in_parallel(_archive, file_ids, project=project)
 
-    def check_projects_still_ready_to_archive(self, list_of_projects: list) -> set:
+    def check_projects_still_ready_to_archive(
+        self, list_of_projects: list
+    ) -> set:
         """
         Checks that projects are still ready to archive.
         Adds those that are still ready to a list ready for bulk archiving.
@@ -174,7 +176,7 @@ class ArchiveClass:
                 # or project is inactive in last 'archived_modified_month',
                 # then it should still be archived
                 projects_cleared_for_archive.append(project_id)
-            
+
             else:
                 # project not older than ARCHIVE_MODIFIED_MONTH
                 # meaning project has been modified recently, so skip
@@ -188,6 +190,7 @@ class ArchiveClass:
         Search for all live files in each of a list of projects.
         Runs in parallel.
         """
+
         def _find(project_id):
             """
             Just get everything with the 'file' classname
@@ -325,21 +328,24 @@ class ArchiveClass:
         files = find_files_by_folder_paths_parallel(
             directory_list, self.env.PROJECT_52
         )
-        files = {
-            k: list(v) for k, v in groupby(files, lambda x: x["folder"])
-        }
+        files = {k: list(v) for k, v in groupby(files, lambda x: x["folder"])}
 
         # directories in to-be-archived list in stagingarea52
         for directory in directory_list:
             all_files_in_directory = files[directory]
-            
+
             # if any files are tagged 'never-archive' we want to skip the whole directory
             # this includes even files that are somehow archived...
-            tags: list[str] = [tag.lower() for tag in all_files_in_directory["describe"]["tags"]]
+            tags: list[str] = [
+                tag.lower()
+                for tag in all_files_in_directory["describe"]["tags"]
+            ]
             if "never_archive" in tags:
-                logger.info(f"NEVER ARCHIVE: {directory} in {self.env.PROJECT_52}")
+                logger.info(
+                    f"NEVER ARCHIVE: {directory} in {self.env.PROJECT_52}"
+                )
             else:
-                # get only active_files 
+                # get only active_files
                 active_files_in_directory = []
                 for file in all_files_in_directory:
                     if file["archival_state"] == "live":
@@ -391,11 +397,15 @@ class ArchiveClass:
             if not files:
                 continue
 
-            tags: list[str] = [tag.lower() for tag in files["describe"]["tags"]]
+            tags: list[str] = [
+                tag.lower() for tag in files["describe"]["tags"]
+            ]
             if "never_archive" in tags:
-                logger.info(f"NEVER ARCHIVE: {folder_path} in {self.env.PRECISION_ARCHIVING}")
+                logger.info(
+                    f"NEVER ARCHIVE: {folder_path} in {self.env.PRECISION_ARCHIVING}"
+                )
             else:
-                # get only active_files 
+                # get only active_files
                 active_files_in_directory = []
                 for file in files:
                     if file["archival_state"] == "live":
@@ -406,13 +416,13 @@ class ArchiveClass:
             )  # get latest modified date
 
             # see if latest modified date is more than precision_month
-            if older_than(
-                self.env.PRECISION_MONTH, latest_modified_date
-            ):
+            if older_than(self.env.PRECISION_MONTH, latest_modified_date):
                 # archive the folder in the project-id
                 if not self.env.ARCHIVE_DEBUG:
                     # archive the folder
-                    active_file_ids = [x for x in active_files_in_directory["id"]]
+                    active_file_ids = [
+                        x for x in active_files_in_directory["id"]
+                    ]
                     self._parallel_archive_file(
                         self, active_file_ids, project_id
                     )
