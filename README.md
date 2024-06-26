@@ -19,7 +19,7 @@ Check for archivable projects or directories or folders in "precision" projects 
 The script generates a pickle file at location specified at `AUTOMATED_ARCHIVE_PICKLE_PATH`.
 
 ## Member
-The script requires `members.ini` with section [members]. See example in repo. Mount the `members.ini` to read the file
+The script requires `members.ini` with section [members]. See example `example-members.ini` in repo. Mount the `members.ini` to read the file
 
 ```
 -v /<path>/<to>/members.ini:/members.ini:ro
