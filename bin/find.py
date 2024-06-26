@@ -241,7 +241,7 @@ class FindClass:
         )
         file_archival_statuses = {
             k: list(v)
-            for k, v in groupby(archival_statuses, lambda x: x["project"])
+            for k, v in groupby(file_archival_statuses, lambda x: x["project"])
         }
 
         for index, (project_id, v) in enumerate(qualified_projects.items()):
@@ -397,12 +397,16 @@ class FindClass:
                 logger.info('Directory has "never-archive" tag. Skip.')
                 continue
 
-            # TODO: filter out files so you only get 'live' ones
-
-            self.archiving_directories.append(folder)
-            self.archiving_directories_slack.append(
+            # filter out files so you only get 'live' ones
+            statuses = set(
+                [x["describe"]["archivalState"] for x in folder_files],
+            )
+            if "live" in statuses:
+                self.archiving_directories.append(folder)
+                self.archiving_directories_slack.append(
                 f"<{STAGING_PREFIX}{folder}|{folder}>"
             )
+
 
     def _turn_epoch_to_datetime(self, epoch: int) -> dt.datetime:
         """
