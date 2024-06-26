@@ -133,7 +133,7 @@ class FindClass:
             return dx.DXProject(project_id).list_folder(
                 folder=directory_path,
                 only="folders",  # just get folders
-                describe=False,
+                describe={"fields": {"archivalState": True}},
             )["folders"]
         except Exception as e:
             logger.error(e)  # probably wont happen but just in case
@@ -428,7 +428,6 @@ class FindClass:
         # assemble a dictionary of project IDs with their directories
         project_to_prefix = dict()
 
-        projects_still_exist = list()
         for project_id in self.env.PRECISION_ARCHIVING:
             try:
                 project = dx.DXProject(project_id)
@@ -439,17 +438,12 @@ class FindClass:
                 )
                 continue  # skip
 
-            projects_still_exist.append(project)
             project_to_prefix[
                 project_id
             ] = f"{self.env.DNANEXUS_URL_PREFIX}/{project_id.lstrip('project-')}/data"
 
-        for project in projects_still_exist:
             # get all folders within the project
-            folders = project.list_folder(
-                only="folders",
-                describe={"fields": {"archivalState": True}},
-            ).get("folders", [])
+            folders = self._get_folders_in_project(project)
 
             # parallel-fetch the files for the project
             project_files = find_files_by_folder_paths_parallel(
