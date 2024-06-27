@@ -147,6 +147,7 @@ def find_files_by_folder_paths_parallel(paths, project):
                         "archivalState": True,
                         "tags": True,
                         "modified": True,
+                        "folder": True,
                     }
                 },
             )

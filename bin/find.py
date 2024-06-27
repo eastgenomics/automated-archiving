@@ -212,9 +212,7 @@ class FindClass:
                 )
             )
 
-        return call_in_parallel(
-            func=_find, items=projects
-        )
+        return call_in_parallel(func=_find, items=projects)
 
     def find_projects(
         self,
@@ -244,7 +242,10 @@ class FindClass:
 
         # group by project
         file_archival_statuses = {
-            k: list(v) for k, v in groupby(file_archival_statuses, lambda x: x["project"])
+            k: list(v) for k, v in groupby(
+                file_archival_statuses,
+                lambda x: x["project"]
+                )
         }
 
         for index, (project_id, v) in enumerate(qualified_projects.items()):
@@ -269,7 +270,10 @@ class FindClass:
                 project_statuses = file_archival_statuses.get(project_id)
                 if project_statuses:
                     statuses = set(
-                        [x["describe"]["archivalState"] for x in project_statuses],
+                        [
+                            x["describe"]["archivalState"]
+                            for x in project_statuses
+                        ],
                     )
 
                 if not statuses or "live" in statuses:
@@ -383,11 +387,13 @@ class FindClass:
         # retrieve files in every folder
         # then group the files per-folder
         project_files = find_files_by_folder_paths_parallel(
-            self.env.PROJECT_52, list(trimmed_to_original_folder_path.values())
+            list(trimmed_to_original_folder_path.values()), self.env.PROJECT_52
         )
         project_files = {
-            k: list(v) for k, v in groupby(project_files,
-                                           lambda x: x["folder"])
+            k: list(v) for k, v in groupby(
+                project_files,
+                lambda x: x["describe"]["folder"]
+                )
         }
         # look at the files in each path for the project
         for folder in list(trimmed_to_original_folder_path.values()):
@@ -454,27 +460,31 @@ class FindClass:
             # parallel-fetch the files for the project
             folder_files = find_files_by_folder_paths_parallel(
                 folders,
-                project["id"],
+                project_id,
             )
             folder_files = {
-                k: list(v) for k, v in groupby(folder_files,
-                                               lambda x: x["describe"]["folder"])
+                k: list(v) for k, v in groupby(
+                    folder_files,
+                    lambda x: x["describe"]["folder"]
+                    )
             }
 
             # for each folder, check whether the contents are live, never-archive,
             # or were modified recently enough to archive
             for folder, files in folder_files.items():
+                if not files:
+                    continue
                 active_files = [
                     file
                     for file in files
                     if file["describe"]["archivalState"] == "live"
                 ]
-                project_tags = [file["describe"]["tags"] for file in files]
+                tags = [file["describe"]["tags"] for file in files]
                 latest_modified_date = max(
                     [file["describe"]["modified"] for file in files]
                 )  # get latest modified date
 
-                if "never-archive" in project_tags:
+                if "never-archive" in tags:
                     logger.info(
                         f'Folder {folder} is tagged with "never-archive". Skip.'
                     )
@@ -484,16 +494,18 @@ class FindClass:
                         )
                         continue
 
-                # see if latest modified date is more than precision_month
-                if older_than(self.env.PRECISION_MONTH, latest_modified_date):
-                    # if the oldest modified file is older than precision_month
-                    # add the folder path and project-id to memory pickle
-                    self.archiving_precision_directories.append(
-                        f"{project_id}|{folder}"
-                    )
-                    self.archiving_precision_directories_slack.append(
-                        f"<{project_to_prefix[project_id]}{folder}|{folder}>"
-                    )
+                    # see if latest modified date is more than precision_month
+                    if older_than(
+                        self.env.PRECISION_MONTH, latest_modified_date
+                    ):
+                        # if the oldest modified file is older than precision_month
+                        # add the folder path and project-id to memory pickle
+                        self.archiving_precision_directories.append(
+                            f"{project_id}|{folder}"
+                        )
+                        self.archiving_precision_directories_slack.append(
+                            f"<{project_to_prefix[project_id]}{folder}|{folder}>"
+                        )
 
     def save_to_pickle(self):
         """

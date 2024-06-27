@@ -47,9 +47,7 @@ class ArchiveClass:
                 logger.error(e)
                 return None
 
-        return call_in_parallel(
-            func=_get, items=project_ids
-        )
+        return call_in_parallel(func=_get, items=project_ids)
 
     def _find_file_ids_that_match_regex_no_api(
         self,
@@ -350,14 +348,14 @@ class ArchiveClass:
                 for file in all_files_in_directory:
                     if file["archival_state"] == "live":
                         active_files_in_directory.append(file)
-
-                archived_num = self._archive_directory_based_on_path(
-                    active_files_in_directory,
-                    self.env.PROJECT_52,
-                    directory,
-                )
-                if archived_num > 0:
-                    archived_dict[directory] = archived_num
+                if active_files_in_directory:
+                    archived_num = self._archive_directory_based_on_path(
+                        active_files_in_directory,
+                        self.env.PROJECT_52,
+                        directory,
+                    )
+                    if archived_num > 0:
+                        archived_dict[directory] = archived_num
 
         return archived_dict
 
