@@ -183,7 +183,7 @@ class FindClass:
 
         return False
 
-    def get_archival_status_parallel(self, projects) -> list:
+    def get_file_archival_status_parallel(self, projects) -> list:
         """
         Call dxpy.find_data_objects in parallel.
 
@@ -206,6 +206,7 @@ class FindClass:
             """
             return list(
                 dx.find_data_objects(
+                    classname="file",
                     project=project,
                     describe={"fields": {"archivalState": True}},
                 )
@@ -236,13 +237,14 @@ class FindClass:
 
         user_to_project_id_and_dnanexus = collections.defaultdict(list)
 
-        # get archival statuses for each project
-        file_archival_statuses = self.get_archival_status_parallel(
+        # get archival statuses for files only, for each project
+        file_archival_statuses = self.get_file_archival_status_parallel(
             qualified_projects
         )
+
+        # group by project
         file_archival_statuses = {
-            k: list(v) for k, v in groupby(file_archival_statuses,
-                                           lambda x: x["project"])
+            k: list(v) for k, v in groupby(file_archival_statuses, lambda x: x["project"])
         }
 
         for index, (project_id, v) in enumerate(qualified_projects.items()):
@@ -263,35 +265,34 @@ class FindClass:
                     f'Project {project_name} is tagged with "never-archive". Skip.'
                 )
             else:
-                # get all files' archivalStatus
+                # get all files' archivalState
                 project_statuses = file_archival_statuses.get(project_id)
                 statuses = set(
-                    [x["describe"]["archivalState"] for x in project_statuses],
+                    [x["describe"]["archivalState"] for x in project_statuses if project_statuses],
                 )
 
-                if "live" in statuses:
-                    pass  # there is something to be archived
-                else:
+                if not "live" in statuses:
                     logger.info(f"Everything archived in {project_id}. Skip.")
                     continue  # everything has been archived
-
-                # add project-id to archiving list (002 and 003)
-                self.archiving_projects.append(project_id)
-
-                # below are preparation for slack notification
-                dnanexus_project_url = f"<{self.env.DNANEXUS_URL_PREFIX}/{trimmed_project_id}/|{project_name}>"
-
-                if project_name.startswith("002"):
-                    self.archiving_projects_2_slack.append(
-                        dnanexus_project_url
-                    )
                 else:
-                    user_to_project_id_and_dnanexus[user].append(
-                        {
-                            "id": project_id,
-                            "link": dnanexus_project_url,
-                        }
-                    )
+                    # there is something to archive
+                    # add project-id to archiving list (002 and 003)
+                    self.archiving_projects.append(project_id)
+
+                    # below are preparation for slack notification
+                    dnanexus_project_url = f"<{self.env.DNANEXUS_URL_PREFIX}/{trimmed_project_id}/|{project_name}>"
+
+                    if project_name.startswith("002"):
+                        self.archiving_projects_2_slack.append(
+                            dnanexus_project_url
+                        )
+                    else:
+                        user_to_project_id_and_dnanexus[user].append(
+                            {
+                                "id": project_id,
+                                "link": dnanexus_project_url,
+                            }
+                        )
 
         # get everything ready for slack notification
         self.archiving_projects_2_slack = sorted(

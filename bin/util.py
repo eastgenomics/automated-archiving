@@ -110,7 +110,11 @@ def call_in_parallel(func, items, **find_data_args) -> list:
         for future in concurrent.futures.as_completed(concurrent_jobs):
             # access returned output as each is returned in any order
             try:
-                results.append(future.result())
+                if type(future.result()) == list:
+                    # flatten out the final result
+                    results.extend(future.result())
+                else:
+                    results.append(future.result())
             except Exception as exc:
                 # catch any errors that might get raised during querying
                 print(
