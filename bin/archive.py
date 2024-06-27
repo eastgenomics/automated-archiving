@@ -145,7 +145,7 @@ class ArchiveClass:
         project_details = self._get_projects_describe(list_of_projects)
         project_details = {
             k: list(v) for k, v in groupby(project_details,
-                                           lambda x: x["project"])
+                                           lambda x: x["id"])
         }
 
         # First make sure that projects are still ready for archive
@@ -182,6 +182,8 @@ class ArchiveClass:
                     f"RECENTLY MODIFIED: {project_name}. Skip archiving!"
                 )
                 continue
+        
+        return list(set(projects_cleared_for_archive))
 
     def find_live_files_parallel_multiproject(self, projects):
         """
@@ -194,6 +196,7 @@ class ArchiveClass:
             Just get everything with the 'file' classname
             and the archival state 'live' for a given project
             """
+            #TODO: getting errors on archival_state despite this being in manual?
             return list(
                 dx.find_data_objects(
                     project=project_id,
