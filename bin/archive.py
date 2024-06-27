@@ -196,7 +196,6 @@ class ArchiveClass:
             Just get everything with the 'file' classname
             and the archival state 'live' for a given project
             """
-            #TODO: getting errors on archival_state despite this being in manual?
             return list(
                 dx.find_data_objects(
                     project=project_id,
@@ -349,7 +348,7 @@ class ArchiveClass:
                 # get only active_files
                 active_files_in_directory = []
                 for file in all_files_in_directory:
-                    if file["archival_state"] == "live":
+                    if file["describe"]["archivalState"] == "live":
                         active_files_in_directory.append(file)
                 if active_files_in_directory:
                     archived_num = self._archive_directory_based_on_path(
@@ -409,7 +408,7 @@ class ArchiveClass:
                 # get only active_files
                 active_files_in_directory = []
                 for file in files:
-                    if file["archival_state"] == "live":
+                    if file["describe"]["archivalState"] == "live":
                         active_files_in_directory.append(file)
 
             latest_modified_date = max(
