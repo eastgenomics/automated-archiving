@@ -267,11 +267,12 @@ class FindClass:
             else:
                 # get all files' archivalState
                 project_statuses = file_archival_statuses.get(project_id)
-                statuses = set(
-                    [x["describe"]["archivalState"] for x in project_statuses if project_statuses],
-                )
+                if project_statuses:
+                    statuses = set(
+                        [x["describe"]["archivalState"] for x in project_statuses],
+                    )
 
-                if not "live" in statuses:
+                if not statuses or "live" in statuses:
                     logger.info(f"Everything archived in {project_id}. Skip.")
                     continue  # everything has been archived
                 else:
@@ -382,37 +383,37 @@ class FindClass:
         # retrieve files in every folder
         # then group the files per-folder
         project_files = find_files_by_folder_paths_parallel(
-            self.env.PROJECT_52, trimmed_to_original_folder_path.values()
+            self.env.PROJECT_52, list(trimmed_to_original_folder_path.values())
         )
         project_files = {
             k: list(v) for k, v in groupby(project_files,
                                            lambda x: x["folder"])
         }
         # look at the files in each path for the project
-        for folder in trimmed_to_original_folder_path.values():
+        for folder in list(trimmed_to_original_folder_path.values()):
             # get files in this folder
             folder_files = project_files.get(folder)
-
-            tags = set(
-                itertools.chain.from_iterable(
-                    [x["describe"]["tags"] for x in folder_files]
+            if folder_files:
+                tags = set(
+                    itertools.chain.from_iterable(
+                        [x["describe"]["tags"] for x in folder_files]
+                    )
                 )
-            )
 
-            # if there's 'never-archive' tag in any file, continue
-            if "never-archive" in tags:
-                logger.info('Directory has "never-archive" tag. Skip.')
-                continue
+                # if there's 'never-archive' tag in any file, continue
+                if "never-archive" in tags:
+                    logger.info('Directory has "never-archive" tag. Skip.')
+                    continue
 
-            # filter out files so you only get 'live' ones
-            statuses = set(
-                [x["describe"]["archivalState"] for x in folder_files],
-            )
-            if "live" in statuses:
-                self.archiving_directories.append(folder)
-                self.archiving_directories_slack.append(
-                    f"<{STAGING_PREFIX}{folder}|{folder}>"
+                # filter out files so you only get 'live' ones
+                statuses = set(
+                    [x["describe"]["archivalState"] for x in folder_files],
                 )
+                if "live" in statuses:
+                    self.archiving_directories.append(folder)
+                    self.archiving_directories_slack.append(
+                        f"<{STAGING_PREFIX}{folder}|{folder}>"
+                    )
 
     def _turn_epoch_to_datetime(self, epoch: int) -> dt.datetime:
         """
