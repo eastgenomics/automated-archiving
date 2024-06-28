@@ -522,36 +522,45 @@ class FindClass:
             self.env.AUTOMATED_ARCHIVE_PICKLE_PATH, self.archive_pickle
         )
 
-    def get_tar(self) -> list:
+    def get_tar_staging(self, directories) -> list:
         """
         Function to get all .tar files in staging-52 that fits below criteria:
         - not been modified in the last TAR_MONTH
+
+        Uses the list of directories from the pickle file to parallelise
+        searching
+
+        Param:
+        :param: list of directories, taken from the pickle file
 
         Returns:
         :return: list of dict (id, folder, name, modified)
         """
         logger.info("Getting all .tar files in staging-52..")
 
+        def _find(path, **find_data_args):
+            # list of tar files not modified in the last 3 months
+            return dx.find_data_objects(
+                name="^run.*.tar.gz",
+                name_mode="regexp",
+                folder=path,
+                modified_before=find_data_args["month_modified_before"],
+                describe={
+                    "fields": {
+                        "modified": True,
+                        "folder": True,
+                        "name": True,
+                    },
+                },
+                project=self.env.PROJECT_52,
+            )
+            
         # make the plain-number month value compatible with 'modified_before'
         # argument in find_data_objects
         month_modified_before = f"-{self.env.TAR_MONTH}m"
-
-        # list of tar files not modified in the last 3 months
-        tars = dx.find_data_objects(
-            name="^run.*.tar.gz",
-            name_mode="regexp",
-            modified_before=month_modified_before,
-            describe={
-                "fields": {
-                    "modified": True,
-                    "folder": True,
-                    "name": True,
-                },
-            },
-            project=self.env.PROJECT_52,
-        )
+        tars = call_in_parallel(_find, directories, month_modified_before=month_modified_before)
+        tars = list(itertools.chain(*tars))
         if not tars:
-            # no .tar older than tar_month
             return []
 
         tars_slack = [

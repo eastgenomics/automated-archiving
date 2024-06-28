@@ -56,8 +56,8 @@ def main():
     )
     precision_projects: Optional[list] = archive_pickle.get("precisions", [])
 
-    tars = find.get_tar()
-
+    tars = find.get_tar_staging(staging52_directories)
+    
     slack.notify({"tars": tars})
 
     if str(datetime.day) in env.ARCHIVING_RUN_DATES:
