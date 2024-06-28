@@ -66,7 +66,8 @@ class EnvironmentVariableClass:
             setattr(self, variable_name, value or default_value)
 
         self._correct_typing()
-        self._process_comma_string_variables()
+        self.PRECISION_ARCHIVING = self._process_comma_splits(self.PRECISION_ARCHIVING)
+        self.ARCHIVING_RUN_DATES = self._process_comma_splits(self.ARCHIVING_RUN_DATES)
         self._process_regex_exclude_variable()
         self._debug_variables()
 
@@ -88,19 +89,19 @@ class EnvironmentVariableClass:
 
         setattr(self, "ARCHIVE_DEBUG", bool(getattr(self, "ARCHIVE_DEBUG")))
 
-    def _process_comma_string_variables(self):
+    def _process_comma_splits(self, input):
         """
-        Process the variables which are typed as basic comma-separated strings
+        Process the strings-with-comma vars
+        Turn them into a list of strings
         """
-        for x in [self.PRECISION_ARCHIVING, self.ARCHIVING_RUN_DATES]:
-            x = (
-                [
-                    project_id.strip()
-                    for project_id in x.split(",")
-                ]
-                if "," in x
-                else []
-            )
+        return (
+            [
+                project_id.strip()
+                for project_id in str(input).split(",")
+            ]
+            if "," in str(input)
+            else [str(input)]
+        )
 
     def _process_regex_exclude_variable(self):
         """
