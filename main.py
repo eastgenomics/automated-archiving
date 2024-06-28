@@ -60,7 +60,7 @@ def main():
 
     slack.notify({"tars": tars})
 
-    if datetime.day in [1, 15]:
+    if datetime.day in env.ARCHIVING_RUN_DATES:
         # check that projects are still ready to archive, and if so,
         # check that their constituent files pass archive criteria too.
         # Finally, archive the files.

@@ -26,6 +26,7 @@ class EnvironmentVariableClass:
         self.ARCHIVE_DEBUG: bool
         self.AUTOMATED_REGEX_EXCLUDE: list[str]
         self.PRECISION_ARCHIVING: list[str]
+        self.ARCHIVING_RUN_DATES: list[str]
         self.DNANEXUS_URL_PREFIX: str
         self.GUIDELINE_URL: str
 
@@ -43,6 +44,7 @@ class EnvironmentVariableClass:
             "ARCHIVE_DEBUG": False,
             "AUTOMATED_REGEX_EXCLUDE": None,
             "PRECISION_ARCHIVING": None,
+            "ARCHIVING_RUN_DATES": None,
             "DNANEXUS_URL_PREFIX": "https://platform.dnanexus.com/panx/projects",
             "GUIDELINE_URL": "https://cuhbioinformatics.atlassian.net/l/cp/Uh8PmK0T",
         }
@@ -64,7 +66,7 @@ class EnvironmentVariableClass:
             setattr(self, variable_name, value or default_value)
 
         self._correct_typing()
-        self._process_precision_projects_variable()
+        self._process_comma_string_variables()
         self._process_regex_exclude_variable()
         self._debug_variables()
 
@@ -86,18 +88,19 @@ class EnvironmentVariableClass:
 
         setattr(self, "ARCHIVE_DEBUG", bool(getattr(self, "ARCHIVE_DEBUG")))
 
-    def _process_precision_projects_variable(self):
+    def _process_comma_string_variables(self):
         """
-        Process the precision archiving projects variable
+        Process the variables which are typed as basic comma-separated strings
         """
-        self.PRECISION_ARCHIVING = (
-            [
-                project_id.strip()
-                for project_id in self.PRECISION_ARCHIVING.split(",")
-            ]
-            if "," in self.PRECISION_ARCHIVING
-            else []
-        )
+        for x in [self.PRECISION_ARCHIVING, self.ARCHIVING_RUN_DATES]:
+            x = (
+                [
+                    project_id.strip()
+                    for project_id in x.split(",")
+                ]
+                if "," in x
+                else []
+            )
 
     def _process_regex_exclude_variable(self):
         """

@@ -51,7 +51,9 @@ The script requires `members.ini` with section [members]. See example `example-m
 - `ARCHIVING_LOGGING_PATH`: path for logging
 - `TAR_MONTH`: period (in months) for `tar.gz` being inactive to be considered 'old enough'
 - `ARCHIVE_MODIFIED_MONTH`: period (in months) to determine whether to skip archiving if project or file is modified within this month (e.g. 1)
+- `PRECISION_MONTH`: period (in months). A 'precision' project directory will be archived if its files have been unmodified for longer than this period
 - `ARCHIVE_DEBUG`: env to comment out actionable codes (e.g. tag file, remove file tag, archive)
+- `ARCHIVING_RUN_DATES`: comma-separated dates of the month (e.g. 1,15 for the 1st and 15th) on which the archiving process will run. On other dates, only the step of finding ready-to-archive objects will run.
 - `AUTOMATED_REGEX_EXCLUDE`: comma-separated regex word e.g. megaqc.json,some-filename\..*,^megapc.csv
 - `PRECISION_ARCHIVING`: comma separated project-id that need specific archiving (folder by folder archiving)
 #### slack
