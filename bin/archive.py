@@ -47,7 +47,7 @@ class ArchiveClass:
                 logger.error(e)
                 return None
 
-        return call_in_parallel(func=_get, items=project_ids)
+        return call_in_parallel(_get, project_ids)
 
     def _find_file_ids_that_match_regex_no_api(
         self,
@@ -70,41 +70,6 @@ class ArchiveClass:
             for file in files:
                 if re.fullmatch(regex, file["name"]):
                     file_ids.add(file["name"])
-        return file_ids
-
-    def _find_file_ids_that_match_regex(
-        self,
-        regexes: list,
-        project_id: str,
-        directory_path: str = None,
-    ) -> set:
-        """
-        Function to find file-ids that match the regexes
-
-        Parameters:
-        :param: regexes: list of regexes to match
-        :param: project_id: project-id
-        :param: directory_path: directory path in the project-id
-
-        Returns: set of file-ids
-        """
-
-        file_ids = set()
-
-        for regex in regexes:
-            try:
-                for file in dx.find_data_objects(
-                    name=regex,
-                    name_mode="regexp",
-                    project=project_id,
-                    folder=directory_path,
-                    classname="file",
-                ):
-                    file_ids.add(file.get("id"))
-            except Exception as e:
-                logger.error(e)
-                continue
-
         return file_ids
 
     def _parallel_archive_file(self, file_ids, project) -> None:
@@ -351,13 +316,14 @@ class ArchiveClass:
                     if file["describe"]["archivalState"] == "live":
                         active_files_in_directory.append(file)
                 if active_files_in_directory:
-                    archived_num = self._archive_directory_based_on_path(
-                        active_files_in_directory,
-                        self.env.PROJECT_52,
-                        directory,
-                    )
-                    if archived_num > 0:
-                        archived_dict[directory] = archived_num
+                    if not self.env.ARCHIVE_DEBUG:
+                        archived_num = self._archive_directory_based_on_path(
+                            active_files_in_directory,
+                            self.env.PROJECT_52,
+                            directory,
+                        )
+                        if archived_num > 0:
+                            archived_dict[directory] = archived_num
 
         return archived_dict
 
