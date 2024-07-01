@@ -78,16 +78,16 @@ def main():
         files_to_archive = archive.check_files_ready_to_archive(files)
 
         if not archive.env.ARCHIVE_DEBUG:  # if running in production
-            # run the archiving
+            # run the archiving per-file
             for (
                 project_id,
-                files_to_archive,
-            ) in checked_projects_to_archive.items():
-                archive._parallel_archive_file(files_to_archive, project_id)
+                files,
+            ) in files_to_archive.items():
+                archive._parallel_archive_file(files, project_id)
         else:
             logger.info(
                 f"Running in DEBUG mode. Skip archiving "
-                f"{checked_projects_to_archive.keys()}!"
+                f"{checked_projects_to_archive}!"
             )
 
         archived_directories_dict = archive.archive_staging52(

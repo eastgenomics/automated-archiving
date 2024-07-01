@@ -1,11 +1,11 @@
 argcomplete==1.12.3
 certifi==2024.2.2
 charset-normalizer==3.3.2
-dxpy==0.357.0
+dxpy==0.378.0
 idna==3.7
 psutil==5.9.8
 python-dateutil==2.9.0.post0
 requests==2.8.0
 six==1.16.0
 urllib3==2.1.0
-websocket-client==0.54.0
+websocket-client==1.7.0

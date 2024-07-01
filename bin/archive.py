@@ -108,16 +108,14 @@ class ArchiveClass:
         # use them to check we still want to archive them, in which case, add
         # their constituent qualifying files to project_files_cleared_for_archive
         project_details = self._get_projects_describe(list_of_projects)
-        project_details = {
-            k: list(v) for k, v in groupby(project_details,
-                                           lambda x: x["id"])
-        }
 
         # First make sure that projects are still ready for archive
         projects_cleared_for_archive = list()
 
         for project_id in list_of_projects:
-            project_detail = project_details.get(project_id)
+            project_detail = (
+                [i for i in project_details if i["id"] == project_id][0]
+            )
 
             if not project_detail:
                 continue
