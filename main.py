@@ -95,23 +95,24 @@ def main():
         )
         archived_precisions = archive.archive_precisions(precision_projects)
 
-        slack.post_long_message_to_slack(
-            "#egg-alerts" "archived", list(checked_projects_to_archive.keys())
-        )
-        slack.post_long_message_to_slack(
-            "#egg-alerts" "archived",
-            [
-                f"{archived_count} files archived in {folder_path} in `staging52`."
-                for folder_path, archived_count in archived_directories_dict.items()
-            ],
-        )
-        slack.post_long_message_to_slack(
-            "#egg-alerts" "archived",
-            [
-                f"{project_id}:{','.join(folder_path)} archived in `precision`."
-                for project_id, folder_path in archived_precisions.items()
-            ],
-        )
+        if not archive.env.ARCHIVE_DEBUG:
+            slack.post_long_message_to_slack(
+                "#egg-alerts" "archived", list(checked_projects_to_archive)
+            )
+            slack.post_long_message_to_slack(
+                "#egg-alerts" "archived",
+                [
+                    f"{archived_count} files archived in {folder_path} in `staging52`."
+                    for folder_path, archived_count in archived_directories_dict.items()
+                ],
+            )
+            slack.post_long_message_to_slack(
+                "#egg-alerts" "archived",
+                [
+                    f"{project_id}:{','.join(folder_path)} archived in `precision`."
+                    for project_id, folder_path in archived_precisions.items()
+                ],
+            )
 
     find.find_projects()
     find.find_directories()

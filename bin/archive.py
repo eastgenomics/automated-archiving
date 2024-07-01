@@ -1,8 +1,9 @@
 import dxpy as dx
 import collections
 from typing import Optional, List
-from itertools import groupby
+from itertools import groupby, chain
 import re
+import itertools
 
 from bin.util import (
     older_than,
@@ -291,7 +292,10 @@ class ArchiveClass:
         files = find_files_by_folder_paths_parallel(
             directory_list, self.env.PROJECT_52
         )
-        files = {k: list(v) for k, v in groupby(files, lambda x: x["folder"])}
+        files = {k: list(v) for k, v in groupby(
+            files, lambda x: x["describe"]["folder"]
+            )
+            }
 
         # directories in to-be-archived list in stagingarea52
         for directory in directory_list:
@@ -299,10 +303,9 @@ class ArchiveClass:
 
             # if any files are tagged 'never-archive' we want to skip the whole directory
             # this includes even files that are somehow archived...
-            tags: list[str] = [
-                tag.lower()
-                for tag in all_files_in_directory["describe"]["tags"]
-            ]
+
+            tags: list[str] = list(chain(*[i["describe"]["tags"] for i in all_files_in_directory]))
+            tags = [i.lower() for i in tags]
             if "never_archive" in tags:
                 logger.info(
                     f"NEVER ARCHIVE: {directory} in {self.env.PROJECT_52}"
