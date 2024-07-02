@@ -273,29 +273,33 @@ class FindClass:
                             for x in project_statuses
                         ],
                     )
+                else:
+                    statuses = set()
 
-                if not statuses or "live" in statuses:
+                if "live" in statuses:
+                    pass
+                else:
                     logger.info(f"Everything archived in {project_id}. Skip.")
                     continue  # everything has been archived
+            
+                # there is something to archive
+                # add project-id to archiving list (002 and 003)
+                self.archiving_projects.append(project_id)
+
+                # below are preparation for slack notification
+                dnanexus_project_url = f"<{self.env.DNANEXUS_URL_PREFIX}/{trimmed_project_id}/|{project_name}>"
+
+                if project_name.startswith("002"):
+                    self.archiving_projects_2_slack.append(
+                        dnanexus_project_url
+                    )
                 else:
-                    # there is something to archive
-                    # add project-id to archiving list (002 and 003)
-                    self.archiving_projects.append(project_id)
-
-                    # below are preparation for slack notification
-                    dnanexus_project_url = f"<{self.env.DNANEXUS_URL_PREFIX}/{trimmed_project_id}/|{project_name}>"
-
-                    if project_name.startswith("002"):
-                        self.archiving_projects_2_slack.append(
-                            dnanexus_project_url
-                        )
-                    else:
-                        user_to_project_id_and_dnanexus[user].append(
-                            {
-                                "id": project_id,
-                                "link": dnanexus_project_url,
-                            }
-                        )
+                    user_to_project_id_and_dnanexus[user].append(
+                        {
+                            "id": project_id,
+                            "link": dnanexus_project_url,
+                        }
+                    )
 
         # get everything ready for slack notification
         self.archiving_projects_2_slack = sorted(
