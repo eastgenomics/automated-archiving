@@ -445,7 +445,10 @@ class FindClass:
                 continue  # skip
 
             # get all folders within the project
-            folders = self._get_folders_in_project(project_id)
+            folders = project.list_folder(
+                only="folders",
+                describe={"fields": {"archivalState": True}},
+            ).get("folders", [])
 
             # parallel-fetch the files for each folder in the project
             folder_files = find_files_by_folder_paths_parallel(
