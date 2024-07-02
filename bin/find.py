@@ -455,9 +455,9 @@ class FindClass:
             ] = f"{self.env.DNANEXUS_URL_PREFIX}/{project_id.lstrip('project-')}/data"
 
             # get all folders within the project
-            folders = self._get_folders_in_project(project)
+            folders = self._get_folders_in_project(project_id)
 
-            # parallel-fetch the files for the project
+            # parallel-fetch the files for each folder in the project
             folder_files = find_files_by_folder_paths_parallel(
                 folders,
                 project_id,
