@@ -114,9 +114,9 @@ class ArchiveClass:
         projects_cleared_for_archive = list()
 
         for project_id in list_of_projects:
-            project_detail = (
-                [i for i in project_details if i["id"] == project_id][0]
-            )
+            project_detail = [
+                i for i in project_details if i["id"] == project_id
+            ][0]
 
             if not project_detail:
                 continue
@@ -146,7 +146,7 @@ class ArchiveClass:
                     f"RECENTLY MODIFIED: {project_name}. Skip archiving!"
                 )
                 continue
-        
+
         return list(set(projects_cleared_for_archive))
 
     def find_live_files_parallel_multiproject(self, projects):
@@ -292,10 +292,10 @@ class ArchiveClass:
         files = find_files_by_folder_paths_parallel(
             directory_list, self.env.PROJECT_52
         )
-        files = {k: list(v) for k, v in groupby(
-            files, lambda x: x["describe"]["folder"]
-            )
-            }
+        files = {
+            k: list(v)
+            for k, v in groupby(files, lambda x: x["describe"]["folder"])
+        }
 
         # directories in to-be-archived list in stagingarea52
         for directory in directory_list:
@@ -304,7 +304,9 @@ class ArchiveClass:
             # if any files are tagged 'never-archive' we want to skip the whole directory
             # this includes even files that are somehow archived...
 
-            tags: list[str] = list(chain(*[i["describe"]["tags"] for i in all_files_in_directory]))
+            tags: list[str] = list(
+                chain(*[i["describe"]["tags"] for i in all_files_in_directory])
+            )
             tags = [i.lower() for i in tags]
             if "never_archive" in tags:
                 logger.info(

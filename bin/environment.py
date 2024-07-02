@@ -66,8 +66,12 @@ class EnvironmentVariableClass:
             setattr(self, variable_name, value or default_value)
 
         self._correct_typing()
-        self.PRECISION_ARCHIVING = self._process_comma_splits(self.PRECISION_ARCHIVING)
-        self.ARCHIVING_RUN_DATES = self._process_comma_splits(self.ARCHIVING_RUN_DATES)
+        self.PRECISION_ARCHIVING = self._process_comma_splits(
+            self.PRECISION_ARCHIVING
+        )
+        self.ARCHIVING_RUN_DATES = self._process_comma_splits(
+            self.ARCHIVING_RUN_DATES
+        )
         self._process_regex_exclude_variable()
         self._debug_variables()
 
@@ -95,10 +99,7 @@ class EnvironmentVariableClass:
         Turn them into a list of strings
         """
         return (
-            [
-                project_id.strip()
-                for project_id in str(input).split(",")
-            ]
+            [project_id.strip() for project_id in str(input).split(",")]
             if "," in str(input)
             else [str(input)]
         )

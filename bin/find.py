@@ -242,10 +242,8 @@ class FindClass:
 
         # group by project
         file_archival_statuses = {
-            k: list(v) for k, v in groupby(
-                file_archival_statuses,
-                lambda x: x["project"]
-                )
+            k: list(v)
+            for k, v in groupby(file_archival_statuses, lambda x: x["project"])
         }
 
         for index, (project_id, v) in enumerate(qualified_projects.items()):
@@ -390,10 +388,10 @@ class FindClass:
             list(trimmed_to_original_folder_path.values()), self.env.PROJECT_52
         )
         project_files = {
-            k: list(v) for k, v in groupby(
-                project_files,
-                lambda x: x["describe"]["folder"]
-                )
+            k: list(v)
+            for k, v in groupby(
+                project_files, lambda x: x["describe"]["folder"]
+            )
         }
         # look at the files in each path for the project
         for folder in list(trimmed_to_original_folder_path.values()):
@@ -436,9 +434,6 @@ class FindClass:
         """
         logger.info("Finding precision projects..")
 
-        # assemble a dictionary of project IDs with their directories
-        project_to_prefix = dict()
-
         for project_id in self.env.PRECISION_ARCHIVING:
             try:
                 project = dx.DXProject(project_id)
@@ -449,11 +444,6 @@ class FindClass:
                 )
                 continue  # skip
 
-            # there are specific prefixes for the Slack message, for some reason
-            project_to_prefix[
-                project_id
-            ] = f"{self.env.DNANEXUS_URL_PREFIX}/{project_id.lstrip('project-')}/data"
-
             # get all folders within the project
             folders = self._get_folders_in_project(project_id)
 
@@ -463,10 +453,10 @@ class FindClass:
                 project_id,
             )
             folder_files = {
-                k: list(v) for k, v in groupby(
-                    folder_files,
-                    lambda x: x["describe"]["folder"]
-                    )
+                k: list(v)
+                for k, v in groupby(
+                    folder_files, lambda x: x["describe"]["folder"]
+                )
             }
 
             # for each folder, check whether the contents are live, never-archive,
@@ -488,24 +478,25 @@ class FindClass:
                     logger.info(
                         f'Folder {folder} is tagged with "never-archive". Skip.'
                     )
-                    if not active_files:  # if no file in folder
-                        logger.info(
-                            f"No live files found in {project_id}:{folder}. Skip."
-                        )
-                        continue
+                if not active_files:  # if no file in folder
+                    logger.info(
+                        f"No live files found in {project_id}:{folder}. Skip."
+                    )
+                    continue
 
-                    # see if latest modified date is more than precision_month
-                    if older_than(
-                        self.env.PRECISION_MONTH, latest_modified_date
-                    ):
-                        # if the oldest modified file is older than precision_month
-                        # add the folder path and project-id to memory pickle
-                        self.archiving_precision_directories.append(
-                            f"{project_id}|{folder}"
-                        )
-                        self.archiving_precision_directories_slack.append(
-                            f"<{project_to_prefix[project_id]}{folder}|{folder}>"
-                        )
+                # see if latest modified date is more than precision_month
+                if older_than(
+                    self.env.PRECISION_MONTH, latest_modified_date
+                ):
+                    # if the oldest modified file is older than precision_month
+                    # add the folder path and project-id to memory pickle
+                    self.archiving_precision_directories.append(
+                        f"{project_id}|{folder}"
+                    )
+                    PRECISION_PREFIX = f"{self.env.DNANEXUS_URL_PREFIX}/{project_id.lstrip('project-')}/data"
+                    self.archiving_precision_directories_slack.append(
+                        f"<{PRECISION_PREFIX}{folder}|{folder}>"
+                    )
 
     def save_to_pickle(self):
         """
@@ -554,11 +545,13 @@ class FindClass:
                 },
                 project=self.env.PROJECT_52,
             )
-            
+
         # make the plain-number month value compatible with 'modified_before'
         # argument in find_data_objects
         month_modified_before = f"-{self.env.TAR_MONTH}m"
-        tars = call_in_parallel(_find, directories, month_modified_before=month_modified_before)
+        tars = call_in_parallel(
+            _find, directories, month_modified_before=month_modified_before
+        )
         tars = list(itertools.chain(*tars))
         if not tars:
             return []
