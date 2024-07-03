@@ -377,7 +377,6 @@ class FindClass:
 
         # trimmed_to_original_folder_path looks like:
         # e.g {"my_folder": "/my_folder", "a_folder": "/processed/folder"}
-
         logger.info(
             f"Number of 'old enough' directories: {len(trimmed_to_original_folder_path)}",
         )
@@ -402,22 +401,23 @@ class FindClass:
             # get files in this folder
             folder_files = project_files.get(folder)
             if folder_files:
+                # get tags and statuses
+                statuses = set(
+                    [x["describe"]["archivalState"] for x in folder_files],
+                )
                 tags = set(
                     itertools.chain.from_iterable(
                         [x["describe"]["tags"] for x in folder_files]
                     )
                 )
 
-                # if there's 'never-archive' tag in any file, continue
-                if "never-archive" in tags:
-                    logger.info('Directory has "never-archive" tag. Skip.')
-                    continue
-
-                # filter out files so you only get 'live' ones
-                statuses = set(
-                    [x["describe"]["archivalState"] for x in folder_files],
-                )
+                # for live files, make sure we skip the directory if there
+                # are any 'never-archive' files present at all
                 if "live" in statuses:
+                    if "never-archive" in tags:
+                        logger.info('Directory has "never-archive" tag. Skip.')
+                        continue
+                
                     self.archiving_directories.append(folder)
                     self.archiving_directories_slack.append(
                         f"<{STAGING_PREFIX}{folder}|{folder}>"
