@@ -233,6 +233,10 @@ class FindClass:
             f"{len(qualified_projects)}!"
         )
 
+        logger.info("Qualified projects:")
+        for i in qualified_projects:
+            logger.info(i)
+
         user_to_project_id_and_dnanexus = collections.defaultdict(list)
 
         # get archival statuses for files only, for each project
@@ -334,8 +338,6 @@ class FindClass:
 
                 self.archiving_projects_3_slack.append(dnanexus_link)
 
-
-
     def find_staging_directories(
         self,
     ) -> None:
@@ -382,6 +384,9 @@ class FindClass:
         logger.info(
             f"Number of 'old enough' directories: {len(trimmed_to_original_folder_path)}",
         )
+        logger.info("Qualified directories:")
+        for key, value in trimmed_to_original_folder_path.items():
+            logger.info(f"{self.env.PROJECT_52}:{value}")
 
         # project url for slack notification
         project52 = self.env.PROJECT_52.lstrip("project-")
