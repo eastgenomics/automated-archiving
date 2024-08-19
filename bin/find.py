@@ -139,7 +139,7 @@ class FindClass:
             logger.error(e)  # probably wont happen but just in case
             return []
 
-    def _validate_directory(self, directory: str) -> bool:
+    def _validate_staging_directory(self, directory: str) -> bool:
         """
         Check if directory or folder is valid:
             - if its 002 or 003 project fits the criteria for archiving
@@ -334,6 +334,8 @@ class FindClass:
 
                 self.archiving_projects_3_slack.append(dnanexus_link)
 
+
+
     def find_staging_directories(
         self,
     ) -> None:
@@ -372,7 +374,7 @@ class FindClass:
         trimmed_to_original_folder_path = {
             trimmed: _
             for trimmed, _ in trimmed_to_original_folder_path.items()
-            if self._validate_directory(trimmed)
+            if self._validate_staging_directory(trimmed)
         }
 
         # trimmed_to_original_folder_path looks like:
@@ -413,15 +415,17 @@ class FindClass:
 
                 # for live files, make sure we skip the directory if there
                 # are any 'never-archive' files present at all
-                if "live" in statuses:
-                    if "never-archive" in tags:
-                        logger.info('Directory has "never-archive" tag. Skip.')
-                        continue
-                
-                    self.archiving_directories.append(folder)
-                    self.archiving_directories_slack.append(
-                        f"<{STAGING_PREFIX}{folder}|{folder}>"
-                    )
+                if not "live" in statuses:
+                    logger.info(f"Everything archived in {self.env.PROJECT_52}:{folder}. Skip.")
+                    continue
+                if "never-archive" in tags:
+                    logger.info(f'Files in folder {self.env.PROJECT_52}:{folder} are tagged with "never-archive". Skip.')
+                    continue
+            
+                self.archiving_directories.append(folder)
+                self.archiving_directories_slack.append(
+                    f"<{STAGING_PREFIX}{folder}|{folder}>"
+                )
 
     def _turn_epoch_to_datetime(self, epoch: int) -> dt.datetime:
         """
@@ -487,7 +491,7 @@ class FindClass:
                     )
                 if not active_files:  # if no file in folder
                     logger.info(
-                        f"No live files found in {project_id}:{folder}. Skip."
+                        f"All files in {project_id}:{folder} are archived. Skip."
                     )
                     continue
 
