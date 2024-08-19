@@ -334,7 +334,7 @@ class FindClass:
 
                 self.archiving_projects_3_slack.append(dnanexus_link)
 
-    def find_directories(
+    def find_staging_directories(
         self,
     ) -> None:
         """
@@ -361,7 +361,7 @@ class FindClass:
         ):
             trimmed_to_original_folder_path[
                 folder.lstrip("/processed/")
-            ] = folder
+            ] = (folder)
 
         logger.info(
             f"Found {len(trimmed_to_original_folder_path)} directories in staging-52"
@@ -429,7 +429,7 @@ class FindClass:
         """
         return dt.datetime.fromtimestamp(epoch / 1000.0)
 
-    def find_precisions(
+    def find_precision_directories(
         self,
     ) -> None:
         """

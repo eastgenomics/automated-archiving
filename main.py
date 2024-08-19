@@ -114,8 +114,8 @@ def main():
         )
 
     find.find_projects()
-    find.find_directories()
-    find.find_precisions()
+    find.find_staging_directories()
+    find.find_precision_directories()
 
     find.save_to_pickle()
 
