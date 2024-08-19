@@ -70,7 +70,7 @@ class ArchiveClass:
         for regex in regexes:
             for file in files:
                 if re.fullmatch(regex, file["name"]):
-                    file_ids.add(file["name"])
+                    file_ids.add(file["id"])
         return file_ids
 
     def _parallel_archive_file(self, file_ids, project) -> None:
